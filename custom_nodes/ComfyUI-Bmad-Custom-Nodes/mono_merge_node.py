@@ -2,6 +2,9 @@ import torch
 import numpy as np
 from PIL import Image, ImageOps
 
+import os
+import sys
+
 class MonoMerge:
     target = ["white", "black"]
     
@@ -19,7 +22,7 @@ class MonoMerge:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "monochromatic_merge"
 
-    CATEGORY = "image"
+    CATEGORY = "Bmad/image"
 
     def monochromatic_merge(self, image1, image2, target):
         image1 = 255. * image1[0].cpu().numpy()

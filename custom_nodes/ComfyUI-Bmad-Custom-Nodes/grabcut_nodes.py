@@ -3,6 +3,8 @@ import numpy as np
 import cv2
 from PIL import Image, ImageOps
 
+import os
+import sys
 
 # TODO these nodes return the mask, not the image with the background removed!
 #       this is somewhat misleading. Consider changing the methods names.
@@ -49,7 +51,7 @@ class FramedMaskGrabCut:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "grab_cut"
 
-    CATEGORY = "CV"
+    CATEGORY = "Bmad/CV"
 
     def grab_cut(self, image, thresh, iterations, margin, frame_option):
         image = 255. * image[0].cpu().numpy()
@@ -151,7 +153,7 @@ class RectGrabCut:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "grab_cut"
 
-    CATEGORY = "CV"
+    CATEGORY = "Bmad/CV"
 
     def grab_cut(self, image, iterations, x1, y1, x2, y2):
         image = 255. * image[0].cpu().numpy()
@@ -225,7 +227,7 @@ class FramedMaskGrabCut2:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "grab_cut"
 
-    CATEGORY = "CV"
+    CATEGORY = "Bmad/CV"
 
     def grab_cut(self, image, thresh_maybe, thresh_sure, iterations, margin, frame_option):
         image = 255. * image[0].cpu().numpy()
@@ -255,13 +257,13 @@ class FramedMaskGrabCut2:
         include_left = not (frame_option & self.frame_options_values['IGNORE_LEFT'])
 
         if include_bottom:
-            mask[-margin:, :] = cv2.GC_BGD  # bottom border
+            mask[-margin:, :] = cv2.GC_BGD 
         if include_top:
-            mask[0:margin, :] = cv2.GC_BGD  # top border
+            mask[0:margin, :] = cv2.GC_BGD 
         if include_right:
-            mask[:, -margin:] = cv2.GC_BGD  # right border
+            mask[:, -margin:] = cv2.GC_BGD  
         if include_left:
-            mask[:, 0:margin] = cv2.GC_BGD  # left border
+            mask[:, 0:margin] = cv2.GC_BGD  
 
         mask, bg_model, fg_model = cv2.grabCut(image, mask, None, bg_model, fg_model, iterCount=iterations,
                                                mode=cv2.GC_INIT_WITH_MASK)

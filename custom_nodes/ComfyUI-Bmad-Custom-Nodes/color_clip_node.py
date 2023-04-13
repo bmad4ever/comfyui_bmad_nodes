@@ -2,6 +2,8 @@ import torch
 import numpy as np
 from PIL import Image, ImageOps
 
+import os
+import sys
 
 # TODO consider computing color distance and use a threshold
 #  setting thresh to 1 should return the same as the current implementation
@@ -44,7 +46,7 @@ class ColorClip:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "color_clip"
 
-    CATEGORY = "image"
+    CATEGORY = "Bmad/image"
 
     def color_clip(self, image, red, green, blue):
         target_rgb = (red, green, blue)

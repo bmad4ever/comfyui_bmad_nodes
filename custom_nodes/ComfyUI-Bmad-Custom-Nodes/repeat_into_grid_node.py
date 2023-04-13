@@ -3,6 +3,8 @@ import numpy as np
 from PIL import Image, ImageEnhance
 from nodes import *
 
+import os
+import sys
 
 class RepeatIntoGridLatent:
     """
@@ -21,7 +23,7 @@ class RepeatIntoGridLatent:
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "repeat_into_grid"
 
-    CATEGORY = "latent"
+    CATEGORY = "Bmad/latent"
 
     def repeat_into_grid(self, samples, columns, rows):
         s = samples.copy()
@@ -48,7 +50,7 @@ class RepeatIntoGridImage:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "repeat_into_grid"
 
-    CATEGORY = "image"
+    CATEGORY = "Bmad/image"
 
     def repeat_into_grid(self, image, columns, rows):
         samples = image.movedim(-1,1)

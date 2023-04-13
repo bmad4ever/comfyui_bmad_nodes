@@ -3,6 +3,9 @@ import numpy as np
 import cv2
 from PIL import Image, ImageOps
 
+import os
+import sys
+
 class OtsuThreshold:
     thresh_modes = ['BINARY','BINARY_INV','TRUNC','TOZERO','TOZERO_INV']
     border_types = [
@@ -58,7 +61,7 @@ class OtsuThreshold:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "otsu_thresthold"
 
-    CATEGORY = "CV"
+    CATEGORY = "Bmad/CV"
     
 
     def otsu_thresthold(self, image, thresh_mode, gaussian_blur_x, gaussian_blur_y, gaussian_border_type):
