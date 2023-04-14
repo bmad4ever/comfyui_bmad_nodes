@@ -1,6 +1,9 @@
+import torch
 import numpy as np
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
+from io import BytesIO
+import base64
 import hashlib
 import json
 import os
@@ -260,11 +263,33 @@ class SaveImage2:
         return (resource_name, )#{ "ui": { "images": results } }
         
 
-# TODO class LoadImage64: Load a Base64 encoded image, useful when making request from outside the web UI
+class LoadImage64:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": 
+                    {
+                     "image_code": ("STRING", {"default": "insert encoded image here"})
+                    },
+                }
+
+    RETURN_TYPES = ("IMAGE", )
+    FUNCTION = "get_image"
+
+    CATEGORY = "Bmad/image"
+    
+
+    def get_image(self, image_code):
+        image = Image.open(BytesIO(base64.b64decode(image_code)))
+        image = image.convert('RGB')
+        image = np.array(image).astype(np.float32) / 255.0
+        image = torch.from_numpy(image)[None,]
+        return (image, )
+        
 
 
 NODE_CLASS_MAPPINGS = {
     "CreateRequestMetadata": CreateRequestMetadata,
     "SetRequestStateToComplete": SetRequestStateToComplete, 
-    "Save Image 2 ( ! )": SaveImage2
+    "Save Image 2 ( ! )": SaveImage2,
+    "LoadImage64":LoadImage64
 }
