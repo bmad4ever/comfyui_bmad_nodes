@@ -24,7 +24,6 @@ class CreateRequestMetadata:
 
     def __init__(self):
         self.type = "output"
-        print("CREATED")
 
     @classmethod
     def INPUT_TYPES(s):
@@ -141,6 +140,8 @@ class SetRequestStateToComplete:
     Set request state to 'complete' in the request metadata file.
     """
     
+    prompt_mode = ["do nothing", "print on console", "save to file"]
+    
     def __init__(self):
         self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
@@ -149,9 +150,10 @@ class SetRequestStateToComplete:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
+                     "api_prompt": (s.prompt_mode, {"default": "do nothing"}),
                      "resource_0": ("TASK_DONE", )
                      },
-                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},
                 }
 
     RETURN_TYPES = ()
@@ -160,13 +162,27 @@ class SetRequestStateToComplete:
     OUTPUT_NODE = True
     
 
-    def update_outdata(self, extra_pnginfo, unique_id, **kwargs):
+    def update_outdata(self, prompt, extra_pnginfo, unique_id, **kwargs):
         CreateRequestMetadata.update_request_state("complete")
         
         # TODO
         # Validate received tasks with all the info in the outputs
         # if they do not match, add some additional info to inform something went wrong
         # then, update class description w/ this detail
+        
+        if kwargs["api_prompt"] == "print on console":
+            print(prompt)
+        elif kwargs["api_prompt"] == "save to file":
+            # TODO
+            # traverse prompt data and replace this node api_prompt value with "do nothing"
+            
+            # TODO
+            # avoid collisions (maybe just name it w/ date/time prefix?)
+            # instead of owerriding the file
+            file = "prompt.json" 
+            file = os.path.join(self.output_dir, file)
+            with open(file, 'w') as f:
+                json.dump(prompt, f)
 
         return ()
         
@@ -174,7 +190,7 @@ class SetRequestStateToComplete:
 
 class SaveImage2:
     """
-    Saves image without storing any metadata using a hashcode.
+    Saves image without storing any metadata using a hexdigest as the name.
     Outputs from these nodes should be sent to SetRequestStateToComplete.
     """
     
@@ -193,7 +209,7 @@ class SaveImage2:
     RETURN_TYPES = ("TASK_DONE", )
     FUNCTION = "save_images"
 
-    CATEGORY = "Bmad/image"
+    CATEGORY = "Bmad/api"
     
 
     def save_images(self, images, resource_name="image", prompt=None, extra_pnginfo=None):
@@ -274,9 +290,7 @@ class LoadImage64:
 
     RETURN_TYPES = ("IMAGE", )
     FUNCTION = "get_image"
-
-    CATEGORY = "Bmad/image"
-    
+    CATEGORY = "Bmad/api"
 
     def get_image(self, image_code):
         image = Image.open(BytesIO(base64.b64decode(image_code)))
@@ -286,10 +300,79 @@ class LoadImage64:
         return (image, )
         
 
+class RequestInputs:
+    
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+                     "new var name": ("STRING", {"default": "image"}),
+                     },
+                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},
+                }
+
+    RETURN_TYPES = tuple(["STRING" for x in range(32)])
+    FUNCTION = "start"
+    CATEGORY = "Bmad/api"
+
+    
+    def start(self, extra_pnginfo, unique_id, **kwargs):
+        values = []
+        for node in extra_pnginfo["workflow"]["nodes"]:
+            if node["id"] == int(unique_id):
+                for output in node["outputs"]:
+                    print(output)
+                    values.append(node["properties"][output["name"]])
+                break
+        return tuple(values)
+
+
+class String2Int:
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"inStr": ("STRING", {"default": ""})}, }
+    
+    RETURN_TYPES = ("INT", )
+    FUNCTION = "convert"
+    CATEGORY = "Bmad/api"
+    
+    def convert(self, inStr):
+        return (int(inStr),)
+
+class String2Float:
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"inStr": ("STRING", {"default": ""})}, }
+    
+    RETURN_TYPES = ("FLOAT",)
+    FUNCTION = "convert"
+    CATEGORY = "Bmad/api"
+    
+    def convert(self, inStr):
+        return (float(inStr),)
+
+class String2WAS_Text:
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"inStr": ("STRING", {"default": ""})}, }
+    
+    RETURN_TYPES = ("ASCII",)
+    FUNCTION = "convert"
+    CATEGORY = "Bmad/api"
+    
+    def convert(self, inStr):
+        return (inStr,)
+
 
 NODE_CLASS_MAPPINGS = {
     "CreateRequestMetadata": CreateRequestMetadata,
     "SetRequestStateToComplete": SetRequestStateToComplete, 
     "Save Image 2 ( ! )": SaveImage2,
-    "LoadImage64":LoadImage64
+    "Load 64 Encoded Image":LoadImage64,
+    "RequestInputs":RequestInputs, 
+    "String to Integer":String2Int,
+    "String to Float":String2Float,
+    "String to WAS_Text":String2WAS_Text
 }

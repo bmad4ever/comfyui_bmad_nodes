@@ -3,13 +3,12 @@ from .grabcut_nodes import NODE_CLASS_MAPPINGS as grab
 from .mono_merge_node import NODE_CLASS_MAPPINGS as monomerge
 from .otsu_threshold_node import NODE_CLASS_MAPPINGS as otsu
 from .repeat_into_grid_node import NODE_CLASS_MAPPINGS as repeat
-#from .save_image_2 import NODE_CLASS_MAPPINGS as save
-from .request_metadata import NODE_CLASS_MAPPINGS as request
+from .api_nodes import NODE_CLASS_MAPPINGS as api
 
 import __main__
 import os
 
-NODE_CLASS_MAPPINGS = {**colorclip, **grab, **monomerge, **otsu, **repeat, **request}
+NODE_CLASS_MAPPINGS = {**colorclip, **grab, **monomerge, **otsu, **repeat, **api}
 
 __all__ = ['NODE_CLASS_MAPPINGS']
 
