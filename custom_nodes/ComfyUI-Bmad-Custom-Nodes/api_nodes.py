@@ -140,8 +140,6 @@ class SetRequestStateToComplete:
     Set request state to 'complete' in the request metadata file.
     """
     
-    prompt_mode = ["do nothing", "print on console", "save to file"]
-    
     def __init__(self):
         self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
@@ -150,10 +148,8 @@ class SetRequestStateToComplete:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                     "api_prompt": (s.prompt_mode, {"default": "do nothing"}),
                      "resource_0": ("TASK_DONE", )
                      },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},
                 }
 
     RETURN_TYPES = ()
@@ -162,20 +158,46 @@ class SetRequestStateToComplete:
     OUTPUT_NODE = True
     
 
-    def update_outdata(self, prompt, extra_pnginfo, unique_id, **kwargs):
+    def update_outdata(self, **kwargs):
         CreateRequestMetadata.update_request_state("complete")
         
         # TODO
         # Validate received tasks with all the info in the outputs
         # if they do not match, add some additional info to inform something went wrong
         # then, update class description w/ this detail
+
+        return ()
         
-        if kwargs["api_prompt"] == "print on console":
+
+class GetPrompt:
+    
+    prompt_mode = ["print to console", "save to file"]
+
+    def __init__(self):
+        self.output_dir = folder_paths.get_output_directory()
+        self.type = "output"
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+                     "api_prompt": (s.prompt_mode, {"default": "print to console"})
+                     },
+                "hidden": {"prompt": "PROMPT", "unique_id": "UNIQUE_ID"},     
+                }
+                
+    RETURN_TYPES = ()
+    FUNCTION = "getPrompt"
+    CATEGORY = "Bmad/api"
+    OUTPUT_NODE = True
+
+    def getPrompt(self, api_prompt, prompt, unique_id):
+        #remove this node from the prompt
+        this_node = prompt[unique_id]
+        del prompt[unique_id]
+        
+        if api_prompt == "print to console":
             print(prompt)
-        elif kwargs["api_prompt"] == "save to file":
-            # TODO
-            # traverse prompt data and replace this node api_prompt value with "do nothing"
-            
+        elif api_prompt == "save to file":
             # TODO
             # avoid collisions (maybe just name it w/ date/time prefix?)
             # instead of owerriding the file
@@ -183,9 +205,11 @@ class SetRequestStateToComplete:
             file = os.path.join(self.output_dir, file)
             with open(file, 'w') as f:
                 json.dump(prompt, f)
-
+        else:
+            pass
+            
+        prompt[unique_id] = this_node # (?) required to properly terminate the prompt and remove it from the queue
         return ()
-        
 
 
 class SaveImage2:
@@ -369,6 +393,7 @@ class String2WAS_Text:
 NODE_CLASS_MAPPINGS = {
     "CreateRequestMetadata": CreateRequestMetadata,
     "SetRequestStateToComplete": SetRequestStateToComplete, 
+    "Get Prompt":GetPrompt,
     "Save Image 2 ( ! )": SaveImage2,
     "Load 64 Encoded Image":LoadImage64,
     "RequestInputs":RequestInputs, 
