@@ -24,10 +24,13 @@ function RemoveUnnamedOutputs(node){
 }
               
 function AddWidgetsForAllProperties(node){
+	if(node.widgets.length == 2 + node.outputs.length)
+		return;
+	
 	const type = "STRING";
 	for (let i = 0 ; i < node.outputs.length; i++) {
 		let name = node.outputs[i].name;
-		let value = node.properties[name];
+		let value = node.properties["values"][name];
 		CreateWidget(node, type, name, value,  function (v, _, node) {SetPropertyValue(this, node, v)});
 	}
 }
@@ -55,7 +58,8 @@ app.registerExtension({
                 
                 RemoveUnnamedOutputs(this);
 				if(!this.properties["values"])
-					this.properties["values"] = {}
+					this.properties["values"] = {};
+				this.widgets[1]["disabled"] = true;
                 
 				this.getExtraMenuOptions = function(_, options) {                   
 					options.unshift(
@@ -102,6 +106,8 @@ app.registerExtension({
 											this.widgets.splice(i+2);
 										this.removeOutput(i);
 									}
+								//update values
+								this.widgets[1].value = JSON.stringify(this.properties["values"])
 							},
 						}
 						,
