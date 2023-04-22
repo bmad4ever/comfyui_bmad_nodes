@@ -196,7 +196,7 @@ class GetPrompt:
         del prompt[unique_id]
         
         if api_prompt == "print to console":
-            print(prompt)
+            print(json.dumps(prompt))
         elif api_prompt == "save to file":
             # TODO
             # avoid collisions (maybe just name it w/ date/time prefix?)
@@ -204,7 +204,7 @@ class GetPrompt:
             file = "prompt.json" 
             file = os.path.join(self.output_dir, file)
             with open(file, 'w') as f:
-                json.dump(prompt, f)
+                json.dump(prompt, f, indent=1)
         else:
             pass
             
@@ -329,9 +329,9 @@ class RequestInputs:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                     "new var name": ("STRING", {"default": "image"}),
+                     "new_var_name": ("STRING", {"default": "image"}),
+                     "values": ("STRING", {"default": ""}),
                      },
-                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},
                 }
 
     RETURN_TYPES = tuple(["STRING" for x in range(32)])
@@ -339,15 +339,10 @@ class RequestInputs:
     CATEGORY = "Bmad/api"
 
     
-    def start(self, extra_pnginfo, unique_id, **kwargs):
-        values = []
-        for node in extra_pnginfo["workflow"]["nodes"]:
-            if node["id"] == int(unique_id):
-                for output in node["outputs"]:
-                    print(output)
-                    values.append(node["properties"][output["name"]])
-                break
-        return tuple(values)
+    def start(self, new_var_name, values):
+        print(values)
+        values = tuple(json.loads(values).values())
+        return values
 
 
 class String2Int:

@@ -13,7 +13,8 @@ function CreateWidget(node, inputType, inputName, val, func, config = {}) {
 }
 
 function SetPropertyValue(widget, node, value) {
-    node.properties[widget.name] = value
+    node.properties["values"][widget.name] = value
+	node.widgets[1].value = JSON.stringify(node.properties["values"])
 }
                   
 function RemoveUnnamedOutputs(node){
@@ -33,11 +34,11 @@ function AddWidgetsForAllProperties(node){
 
 function RemoveWidgetsForAllProperties(node){
 	// no output widgets to remove?
-	if(node.widgets.length == 1)
+	if(node.widgets.length == 2)
 		return;
 	
 	for (let i = node.outputs.length-1; i >= 0; i--) {
-		node.widgets.splice(i+1);
+		node.widgets.splice(i+2);
 	}
 	
 	node.setSize(node.computeSize());
@@ -53,6 +54,8 @@ app.registerExtension({
 				const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 
                 RemoveUnnamedOutputs(this);
+				if(!this.properties["values"])
+					this.properties["values"] = {}
                 
 				this.getExtraMenuOptions = function(_, options) {                   
 					options.unshift(
@@ -74,7 +77,7 @@ app.registerExtension({
                                 }
                                 
                                 // check if the input was already added
-                                if(name in this.properties){
+                                if(name in this.properties["values"]){
                                     alert("Input '" + name +"' already defined. Use a different name.");
                                     return;
                                 }
@@ -84,7 +87,7 @@ app.registerExtension({
                                 
 								// Add output, property and widget.
 								this.addOutput(name, type);
-                                this.setProperty(name, default_value);
+								this.properties["values"][name] = default_value;
                                 //CreateWidget(this, type, name, default_value, function (v, _, node) {SetPropertyValue(this, node, v)});
 							},
 						}
@@ -94,9 +97,9 @@ app.registerExtension({
 							callback: () => {
 								for (let i = this.outputs.length-1; i >= 0; i--) 
 									if (!this.outputs[i].links || this.outputs[i].links.length == 0) {
-										delete this.properties[this.outputs[i].name];
-                                        if(this.widgets.length > 1)
-											this.widgets.splice(i+1);
+										delete this.properties["values"][this.outputs[i].name];
+                                        if(this.widgets.length > 2)
+											this.widgets.splice(i+2);
 										this.removeOutput(i);
 									}
 							},
@@ -127,9 +130,7 @@ app.registerExtension({
 
 	loadedGraphNode(node, _) {
 		if (node.type === "RequestInputs") {
-            if(typeof node.outputs !== 'undefined'){
-				node.setSize(node.computeSize());
-            }
+			node.setSize(node.computeSize());
 		}
 	},
 });
