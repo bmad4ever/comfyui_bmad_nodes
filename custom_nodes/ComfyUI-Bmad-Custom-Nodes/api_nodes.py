@@ -6,6 +6,7 @@ from io import BytesIO
 import base64
 import hashlib
 import json
+import copy
 import os
 import sys
 import folder_paths
@@ -191,10 +192,23 @@ class GetPrompt:
     OUTPUT_NODE = True
 
     def getPrompt(self, api_prompt, prompt, unique_id):
+        #changing the original will mess the prompt execution, therefore make a copy
+        prompt = copy.deepcopy(prompt)
+    
         #remove this node from the prompt
         this_node = prompt[unique_id]
         del prompt[unique_id]
         
+        #remove widgtes inputs from RequestInputs, only "values" is needed.
+        for key in prompt:
+            if prompt[key]["class_type"] == "RequestInputs":
+                inputs = prompt[key]["inputs"]
+                for attribute in list(inputs.keys()):
+                    if attribute != "values":
+                        del inputs[attribute]
+                break #supposes only 1 RequestInputs node exists
+        
+        #print to console or file
         if api_prompt == "print to console":
             print(json.dumps(prompt))
         elif api_prompt == "save to file":
@@ -207,8 +221,7 @@ class GetPrompt:
                 json.dump(prompt, f, indent=1)
         else:
             pass
-            
-        prompt[unique_id] = this_node # (?) required to properly terminate the prompt and remove it from the queue
+
         return ()
 
 
@@ -340,7 +353,6 @@ class RequestInputs:
 
     
     def start(self, new_var_name, values):
-        print(values)
         values = tuple(json.loads(values).values())
         return values
 
