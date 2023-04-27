@@ -6,6 +6,7 @@ from io import BytesIO
 import base64
 import hashlib
 import json
+import copy
 import os
 import sys
 import folder_paths
@@ -19,7 +20,7 @@ class CreateRequestMetadata:
     There should only be ONE instance of this node in a prompt.
     """
     
-    request_id = ""
+    request_id = None
     output_dir = ""
 
     def __init__(self):
@@ -28,15 +29,23 @@ class CreateRequestMetadata:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                     "request_id": ("STRING", {"default": "insert request id here"})
+                     "request_id": ("STRING", {"default": "insert_id"})
                      },
-                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},
                 }
 
     RETURN_TYPES = ()
     FUNCTION = "update_outdata"
     CATEGORY = "Bmad/api"
     OUTPUT_NODE = True
+    
+    
+    @staticmethod
+    def get_and_validate_requestID():
+        if CreateRequestMetadata.request_id == None:
+            raise("Request ID was not set. CreateRequestMetadata node might be missing.")
+        if CreateRequestMetadata.request_id == "":
+            raise("Request ID was set to empty. Check if it is being properly set to avoid conflicts with subsequent requests.")
+        return CreateRequestMetadata.request_id
     
     
     @staticmethod
@@ -72,22 +81,36 @@ class CreateRequestMetadata:
         except FileNotFoundError:
             print(f"\033[91mMetadata file not found: {filename}\033[00m")
             return
-
-        # TODO (remove note or change solution) 
-        # note: regarding resources w/ same name
-        # right now keeps existing data and just issues some warning. 
-        # r.n. I feel like is too soon to start placing restrictions without 
-        # having a somewhat complete solution/workflow, but this behavior may mislead potential users.
-        resource_already_registered = False
-        for item in data["outputs"]:
-            if item["name"] == resource_name:
-                print(f"\033[93m'{resource_name}' resource is already registered in: '{filename}'\033[00m")
-                print(f"\033[93mThe new '{resource_name}' register attempt will be ignored.\033[00m")
-                resource_already_registered = True
-                break
+        
+        resource_index = next((index for index, value in enumerate(data["outputs"]) if value["name"] == resource_name), -1)
+        resource_already_registered = resource_index != -1
         
         if not resource_already_registered:
-            data["outputs"].append({"name":resource_name, "resource":resource_filename})
+            data["outputs"].append({"name":resource_name, "resource": [resource_filename]})
+        else:
+            data["outputs"][resource_index]["resource"].append(resource_filename)
+        
+        with open(filename, 'w') as f:
+            json.dump(data, f)
+
+
+    @staticmethod
+    def add_resource_list(resource_name, resource_filenames):
+        filename = CreateRequestMetadata.get_request_status_file_path()
+        try:
+            with open(filename, 'r') as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            print(f"\033[91mMetadata file not found: {filename}\033[00m")
+            return
+
+        resource_index = next((index for index, value in enumerate(data["outputs"]) if value["name"] == resource_name), -1)
+        resource_already_registered = resource_index != -1
+        
+        if not resource_already_registered:
+            data["outputs"].append({"name":resource_name, "resource": resource_filenames})
+        else: 
+            data["outputs"][resource_index]["resource"].extend(resource_filenames)
         
         with open(filename, 'w') as f:
             json.dump(data, f)
@@ -108,15 +131,12 @@ class CreateRequestMetadata:
             json.dump(data, f)
 
     
-    def update_outdata(self, request_id, extra_pnginfo, unique_id):
-        def request_id_is_unique():
-            for node in extra_pnginfo["workflow"]["nodes"]:
-                if node["type"] != int(unique_id) and node["type"] == "CreateRequestMetadata":
-                    return True
-            return False
+    def update_outdata(self, request_id):       
+        if request_id == "insert_id":
+            raise("Request ID in CreateRequestMetadata node with value: 'insert_id'. You might not be setting it properly or might have more than one CreateRequestMetadata node in your workflow/node.")
         
-        if not request_id_is_unique():
-            raise("More than one request node found.")
+        if CreateRequestMetadata.request_id == request_id:
+            raise("Request ID is equal to previously set ID. You may have more than one CreateRequestMetadata node in your workflow/prompt.")
         
         # no problems found, set the request id
         CreateRequestMetadata.request_id = request_id
@@ -159,7 +179,11 @@ class SetRequestStateToComplete:
     
 
     def update_outdata(self, **kwargs):
+        # update request file
         CreateRequestMetadata.update_request_state("complete")
+        
+        # clear request_id
+        CreateRequestMetadata.request_id = None
         
         # TODO
         # Validate received tasks with all the info in the outputs
@@ -191,10 +215,25 @@ class GetPrompt:
     OUTPUT_NODE = True
 
     def getPrompt(self, api_prompt, prompt, unique_id):
+        #changing the original will mess the prompt execution, therefore make a copy
+        prompt = copy.deepcopy(prompt)
+    
         #remove this node from the prompt
         this_node = prompt[unique_id]
         del prompt[unique_id]
         
+        #remove widgtes inputs from RequestInputs, only "values" is needed.
+        for key in prompt:
+            if prompt[key]["class_type"] == "RequestInputs":
+                inputs = prompt[key]["inputs"]
+                for attribute in list(inputs.keys()):
+                    if attribute != "values":
+                        del inputs[attribute]
+                break #supposes only 1 RequestInputs node exists
+        
+        prompt = {"prompt": prompt}
+        
+        #print to console or file
         if api_prompt == "print to console":
             print(json.dumps(prompt))
         elif api_prompt == "save to file":
@@ -207,8 +246,7 @@ class GetPrompt:
                 json.dump(prompt, f, indent=1)
         else:
             pass
-            
-        prompt[unique_id] = this_node # (?) required to properly terminate the prompt and remove it from the queue
+
         return ()
 
 
@@ -244,7 +282,8 @@ class SaveImage2:
             hash_object.update(data)
             return hash_object.hexdigest()
         
-        hexdigest = build_hashcode(json.dumps(prompt) + resource_name)
+        req_id = CreateRequestMetadata.get_and_validate_requestID()
+        hexdigest = build_hashcode(req_id + resource_name)
                 
         def map_filename(filename):
             prefix_len = len(os.path.basename(hexdigest))
@@ -272,7 +311,8 @@ class SaveImage2:
             os.makedirs(full_output_folder, exist_ok=True)
             counter = 1
 
-        results = list()
+        #results = list()
+        files = list()
         for image in images:
             i = 255. * image.cpu().numpy()
             img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
@@ -286,20 +326,15 @@ class SaveImage2:
 
             file = f"{filename}_{counter:05}_.png"
             img.save(os.path.join(full_output_folder, file), pnginfo=metadata, compress_level=4)
-            results.append({
-                "filename": file,
-                "subfolder": subfolder,
-                "type": self.type
-            });
+            files.append(file)
+            #results.append({
+            #    "filename": file,
+            #    "subfolder": subfolder,
+            #    "type": self.type
+            #});
             counter += 1
-        
-        # TODO
-        # forgot about precessing batches...
-        # should add a resource for each image created?
-        # or an additional field to indicate a range of items?
-        # to be decided later
 
-        CreateRequestMetadata.add_resource(resource_name, hexdigest)
+        CreateRequestMetadata.add_resource_list(resource_name, files)
         return (resource_name, )#{ "ui": { "images": results } }
         
 
@@ -329,7 +364,6 @@ class RequestInputs:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                     "new_var_name": ("STRING", {"default": "image"}),
                      "values": ("STRING", {"default": ""}),
                      },
                 }
@@ -339,8 +373,7 @@ class RequestInputs:
     CATEGORY = "Bmad/api"
 
     
-    def start(self, new_var_name, values):
-        print(values)
+    def start(self, values):
         values = tuple(json.loads(values).values())
         return values
 
