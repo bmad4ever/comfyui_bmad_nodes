@@ -421,20 +421,6 @@ class String2Float:
     def convert(self, inStr):
         return (float(inStr),)
 
-
-class String2WAS_Text:
-
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {"inStr": ("STRING", {"default": ""})}, }
-
-    RETURN_TYPES = ("TEXT",)
-    FUNCTION = "convert"
-    CATEGORY = "Bmad/api/parseInput"
-
-    def convert(self, inStr):
-        return (inStr,)
-
 # endregion : input converters
 
 
@@ -551,7 +537,6 @@ NODE_CLASS_MAPPINGS = {
 
     "String to Integer": String2Int,
     "String to Float": String2Float,
-    "String to WAS_Text": String2WAS_Text,
 
     "CheckpointLoader (dirty)": DirtyCheckpointLoader,
     "CheckpointLoaderSimple (dirty)": DirtyCheckpointLoaderSimple,
