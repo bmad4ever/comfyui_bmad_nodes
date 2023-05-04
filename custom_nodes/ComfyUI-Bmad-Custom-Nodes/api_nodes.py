@@ -8,10 +8,13 @@ import hashlib
 import json
 import copy
 import os
-import sys
 import folder_paths
+import comfy.sd
+import nodes
+import comfy_extras.nodes_hypernetwork as hyper
 
 
+# region : api core nodes
 
 class CreateRequestMetadata:
     """
@@ -19,7 +22,7 @@ class CreateRequestMetadata:
     Also implements static methods to access and modify this json.
     There should only be ONE instance of this node in a prompt.
     """
-    
+
     request_id = None
     output_dir = ""
 
@@ -29,49 +32,45 @@ class CreateRequestMetadata:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                     "request_id": ("STRING", {"default": "insert_id"})
-                     },
-                }
+            "request_id": ("STRING", {"default": "insert_id"})
+        },
+        }
 
     RETURN_TYPES = ()
     FUNCTION = "update_outdata"
     CATEGORY = "Bmad/api"
     OUTPUT_NODE = True
-    
-    
+
     @staticmethod
     def get_and_validate_requestID():
         if CreateRequestMetadata.request_id == None:
-            raise("Request ID was not set. CreateRequestMetadata node might be missing.")
+            raise ("Request ID was not set. CreateRequestMetadata node might be missing.")
         if CreateRequestMetadata.request_id == "":
-            raise("Request ID was set to empty. Check if it is being properly set to avoid conflicts with subsequent requests.")
+            raise (
+                "Request ID was set to empty. Check if it is being properly set to avoid conflicts with subsequent requests.")
         return CreateRequestMetadata.request_id
-    
-    
+
     @staticmethod
     def get_request_status_file_name():
         return f"{CreateRequestMetadata.request_id}.json"
-    
-    
+
     @staticmethod
     def get_request_status_file_path():
         file = CreateRequestMetadata.get_request_status_file_name()
         filename = os.path.join(CreateRequestMetadata.output_dir, file)
         return filename
-    
 
     @staticmethod
     def get_request_metadata():
+        filename = CreateRequestMetadata.get_request_status_file_path()
         try:
-            filename = CreateRequestMetadata.get_request_status_file_path()
             with open(filename, 'r') as f:
                 data = json.load(f)
         except FileNotFoundError:
             print(f"\033[91mMetadata file not found: {filename}\033[00m")
             return None
         return data
-    
-    
+
     @staticmethod
     def add_resource(resource_name, resource_filename):
         filename = CreateRequestMetadata.get_request_status_file_path()
@@ -81,18 +80,18 @@ class CreateRequestMetadata:
         except FileNotFoundError:
             print(f"\033[91mMetadata file not found: {filename}\033[00m")
             return
-        
-        resource_index = next((index for index, value in enumerate(data["outputs"]) if value["name"] == resource_name), -1)
+
+        resource_index = next((index for index, value in enumerate(data["outputs"]) if value["name"] == resource_name),
+                              -1)
         resource_already_registered = resource_index != -1
-        
+
         if not resource_already_registered:
-            data["outputs"].append({"name":resource_name, "resource": [resource_filename]})
+            data["outputs"].append({"name": resource_name, "resource": [resource_filename]})
         else:
             data["outputs"][resource_index]["resource"].append(resource_filename)
-        
+
         with open(filename, 'w') as f:
             json.dump(data, f)
-
 
     @staticmethod
     def add_resource_list(resource_name, resource_filenames):
@@ -104,22 +103,22 @@ class CreateRequestMetadata:
             print(f"\033[91mMetadata file not found: {filename}\033[00m")
             return
 
-        resource_index = next((index for index, value in enumerate(data["outputs"]) if value["name"] == resource_name), -1)
+        resource_index = next((index for index, value in enumerate(data["outputs"]) if value["name"] == resource_name),
+                              -1)
         resource_already_registered = resource_index != -1
-        
+
         if not resource_already_registered:
-            data["outputs"].append({"name":resource_name, "resource": resource_filenames})
-        else: 
+            data["outputs"].append({"name": resource_name, "resource": resource_filenames})
+        else:
             data["outputs"][resource_index]["resource"].extend(resource_filenames)
-        
+
         with open(filename, 'w') as f:
             json.dump(data, f)
 
-
     @staticmethod
     def update_request_state(state):
+        filename = CreateRequestMetadata.get_request_status_file_path()
         try:
-            filename = CreateRequestMetadata.get_request_status_file_path()
             with open(filename, 'r') as f:
                 data = json.load(f)
         except FileNotFoundError:
@@ -130,71 +129,85 @@ class CreateRequestMetadata:
         with open(filename, 'w') as f:
             json.dump(data, f)
 
-    
-    def update_outdata(self, request_id):       
+    @staticmethod
+    def set_error_state(message):
+        filename = CreateRequestMetadata.get_request_status_file_path()
+        try:
+            with open(filename, 'r') as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            print(f"\033[91mMetadata file not found: {filename}\033[00m")
+            return
+
+        data["state"] = "failed"
+        data["error"] = message
+
+        with open(filename, 'w') as f:
+            json.dump(data, f)
+
+        raise Exception(message)
+
+    def update_outdata(self, request_id):
         if request_id == "insert_id":
-            raise("Request ID in CreateRequestMetadata node with value: 'insert_id'. You might not be setting it properly or might have more than one CreateRequestMetadata node in your workflow/node.")
-        
+            raise (
+                "Request ID in CreateRequestMetadata node with value: 'insert_id'. You might not be setting it properly or might have more than one CreateRequestMetadata node in your workflow/node.")
+
         if CreateRequestMetadata.request_id == request_id:
-            raise("Request ID is equal to previously set ID. You may have more than one CreateRequestMetadata node in your workflow/prompt.")
-        
+            raise (
+                "Request ID is equal to previously set ID. You may have more than one CreateRequestMetadata node in your workflow/prompt.")
+
         # no problems found, set the request id
         CreateRequestMetadata.request_id = request_id
         CreateRequestMetadata.output_dir = folder_paths.get_output_directory()
 
         # get output path
         filename = CreateRequestMetadata.get_request_status_file_path()
-        
+
         # write request status to json file
-        request_info = {"state": "started", "outputs":[]}
+        request_info = {"state": "started", "outputs": []}
         with open(filename, 'w') as f:
             json.dump(request_info, f)
 
         return ()
-        
-
 
 
 class SetRequestStateToComplete:
     """
     Set request state to 'complete' in the request metadata file.
     """
-    
+
     def __init__(self):
         self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
-    
-    
+
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                     "resource_0": ("TASK_DONE", )
-                     },
-                }
+            "resource_0": ("TASK_DONE",)
+        },
+        }
 
     RETURN_TYPES = ()
     FUNCTION = "update_outdata"
     CATEGORY = "Bmad/api"
     OUTPUT_NODE = True
-    
 
     def update_outdata(self, **kwargs):
         # update request file
         CreateRequestMetadata.update_request_state("complete")
-        
+
         # clear request_id
         CreateRequestMetadata.request_id = None
-        
+
         # TODO
         # Validate received tasks with all the info in the outputs
         # if they do not match, add some additional info to inform something went wrong
         # then, update class description w/ this detail
 
         return ()
-        
+
 
 class GetPrompt:
-    
     prompt_mode = ["print to console", "save to file"]
 
     def __init__(self):
@@ -204,43 +217,43 @@ class GetPrompt:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                     "api_prompt": (s.prompt_mode, {"default": "print to console"})
-                     },
-                "hidden": {"prompt": "PROMPT", "unique_id": "UNIQUE_ID"},     
-                }
-                
+            "api_prompt": (s.prompt_mode, {"default": "print to console"})
+        },
+            "hidden": {"prompt": "PROMPT", "unique_id": "UNIQUE_ID"},
+        }
+
     RETURN_TYPES = ()
     FUNCTION = "getPrompt"
     CATEGORY = "Bmad/api"
     OUTPUT_NODE = True
 
     def getPrompt(self, api_prompt, prompt, unique_id):
-        #changing the original will mess the prompt execution, therefore make a copy
+        # changing the original will mess the prompt execution, therefore make a copy
         prompt = copy.deepcopy(prompt)
-    
-        #remove this node from the prompt
+
+        # remove this node from the prompt
         this_node = prompt[unique_id]
         del prompt[unique_id]
-        
-        #remove widgtes inputs from RequestInputs, only "values" is needed.
+
+        # remove widgtes inputs from RequestInputs, only "values" is needed.
         for key in prompt:
             if prompt[key]["class_type"] == "RequestInputs":
                 inputs = prompt[key]["inputs"]
                 for attribute in list(inputs.keys()):
                     if attribute != "values":
                         del inputs[attribute]
-                break #supposes only 1 RequestInputs node exists
-        
+                break  # supposes only 1 RequestInputs node exists
+
         prompt = {"prompt": prompt}
-        
-        #print to console or file
+
+        # print to console or file
         if api_prompt == "print to console":
             print(json.dumps(prompt))
         elif api_prompt == "save to file":
             # TODO
             # avoid collisions (maybe just name it w/ date/time prefix?)
             # instead of owerriding the file
-            file = "prompt.json" 
+            file = "prompt.json"
             file = os.path.join(self.output_dir, file)
             with open(file, 'w') as f:
                 json.dump(prompt, f, indent=1)
@@ -255,36 +268,35 @@ class SaveImage2:
     Saves image without storing any metadata using a hexdigest as the name.
     Outputs from these nodes should be sent to SetRequestStateToComplete.
     """
-    
+
     def __init__(self):
         self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
 
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": 
-                    {"images": ("IMAGE", ),
+        return {"required":
+                    {"images": ("IMAGE",),
                      "resource_name": ("STRING", {"default": "image"})},
                 "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
                 }
 
-    RETURN_TYPES = ("TASK_DONE", )
+    RETURN_TYPES = ("TASK_DONE",)
     FUNCTION = "save_images"
 
     CATEGORY = "Bmad/api"
-    
 
     def save_images(self, images, resource_name="image", prompt=None, extra_pnginfo=None):
         def build_hashcode(data):
             if isinstance(data, str):
-                data = data.encode(encoding = 'UTF-8', errors = 'strict')
-            hash_object = hashlib.sha256() 
+                data = data.encode(encoding='UTF-8', errors='strict')
+            hash_object = hashlib.sha256()
             hash_object.update(data)
             return hash_object.hexdigest()
-        
+
         req_id = CreateRequestMetadata.get_and_validate_requestID()
         hexdigest = build_hashcode(req_id + resource_name)
-                
+
         def map_filename(filename):
             prefix_len = len(os.path.basename(hexdigest))
             prefix = filename[:prefix_len + 1]
@@ -304,20 +316,21 @@ class SaveImage2:
             return {}
 
         try:
-            counter = max(filter(lambda a: a[1][:-1] == filename and a[1][-1] == "_", map(map_filename, os.listdir(full_output_folder))))[0] + 1
+            counter = max(filter(lambda a: a[1][:-1] == filename and a[1][-1] == "_",
+                                 map(map_filename, os.listdir(full_output_folder))))[0] + 1
         except ValueError:
             counter = 1
         except FileNotFoundError:
             os.makedirs(full_output_folder, exist_ok=True)
             counter = 1
 
-        #results = list()
+        # results = list()
         files = list()
         for image in images:
             i = 255. * image.cpu().numpy()
             img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
             metadata = PngInfo()
-            #if save_meta_data: TODO add an option for this
+            # if save_meta_data: TODO add an option for this
             #   if prompt is not None:
             #       metadata.add_text("prompt", json.dumps(prompt))
             #   if extra_pnginfo is not None:
@@ -327,27 +340,27 @@ class SaveImage2:
             file = f"{filename}_{counter:05}_.png"
             img.save(os.path.join(full_output_folder, file), pnginfo=metadata, compress_level=4)
             files.append(file)
-            #results.append({
+            # results.append({
             #    "filename": file,
             #    "subfolder": subfolder,
             #    "type": self.type
-            #});
+            # });
             counter += 1
 
         CreateRequestMetadata.add_resource_list(resource_name, files)
-        return (resource_name, )#{ "ui": { "images": results } }
-        
+        return (resource_name,)  # { "ui": { "images": results } }
+
 
 class LoadImage64:
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": 
-                    {
-                     "image_code": ("STRING", {"default": "insert encoded image here"})
-                    },
-                }
+        return {"required":
+            {
+                "image_code": ("STRING", {"default": "insert encoded image here"})
+            },
+        }
 
-    RETURN_TYPES = ("IMAGE", )
+    RETURN_TYPES = ("IMAGE",)
     FUNCTION = "get_image"
     CATEGORY = "Bmad/api"
 
@@ -356,76 +369,192 @@ class LoadImage64:
         image = image.convert('RGB')
         image = np.array(image).astype(np.float32) / 255.0
         image = torch.from_numpy(image)[None,]
-        return (image, )
-        
+        return (image,)
+
 
 class RequestInputs:
-    
+
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                     "values": ("STRING", {"default": ""}),
-                     },
-                }
+            "values": ("STRING", {"default": ""}),
+        },
+        }
 
     RETURN_TYPES = tuple(["STRING" for x in range(32)])
     FUNCTION = "start"
     CATEGORY = "Bmad/api"
 
-    
     def start(self, values):
         values = tuple(json.loads(values).values())
         return values
 
+# endregion : api core nodes
+
+
+# region : input converters
 
 class String2Int:
 
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {"inStr": ("STRING", {"default": ""})}, }
-    
-    RETURN_TYPES = ("INT", )
+
+    RETURN_TYPES = ("INT",)
     FUNCTION = "convert"
-    CATEGORY = "Bmad/api"
-    
+    CATEGORY = "Bmad/api/parseInput"
+
     def convert(self, inStr):
         return (int(inStr),)
+
 
 class String2Float:
 
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {"inStr": ("STRING", {"default": ""})}, }
-    
+
     RETURN_TYPES = ("FLOAT",)
     FUNCTION = "convert"
-    CATEGORY = "Bmad/api"
-    
+    CATEGORY = "Bmad/api/parseInput"
+
     def convert(self, inStr):
         return (float(inStr),)
+
 
 class String2WAS_Text:
 
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {"inStr": ("STRING", {"default": ""})}, }
-    
-    RETURN_TYPES = ("ASCII",)
+
+    RETURN_TYPES = ("TEXT",)
     FUNCTION = "convert"
-    CATEGORY = "Bmad/api"
-    
+    CATEGORY = "Bmad/api/parseInput"
+
     def convert(self, inStr):
         return (inStr,)
+
+# endregion : input converters
+
+
+# region : dirty loaders
+
+class DirtyLoaderUtils:
+
+    # checks file name without taking into account the file extension;
+    # then gets the file with the extension from the list
+    @staticmethod
+    def find_matching_filename(input_string, filenames):
+        input_base, input_ext = os.path.splitext(input_string)
+        for filename in filenames:
+            filename_base, filename_ext = os.path.splitext(filename)
+            if input_base == filename_base:
+                return filename  # return matching filename with file extension
+        CreateRequestMetadata.set_error_state(f"File '{input_string}' not found.")
+
+
+class DirtyCheckpointLoader:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "config_name": ("STRING", {"default": ""}),
+            "ckpt_name": ("STRING", {"default": ""})
+        }}
+
+    RETURN_TYPES = ("MODEL", "CLIP", "VAE")
+    FUNCTION = "load_checkpoint"
+
+    CATEGORY = "Bmad/api/dirty loaders"
+
+    def load_checkpoint(self, config_name, ckpt_name, output_vae=True, output_clip=True):
+        ckpt_name = DirtyLoaderUtils.find_matching_filename(
+            ckpt_name, folder_paths.get_filename_list("checkpoints"))
+
+        config_name = DirtyLoaderUtils.find_matching_filename(
+            config_name, folder_paths.get_filename_list("checkpoints"))
+
+        loader = nodes.CheckpointLoader()
+        return loader.load_checkpoint(config_name, ckpt_name, output_vae, output_clip)
+
+
+class DirtyCheckpointLoaderSimple:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"ckpt_name": ("STRING", {"default": ""})}}
+
+    RETURN_TYPES = ("MODEL", "CLIP", "VAE")
+    FUNCTION = "load_checkpoint"
+
+    CATEGORY = "Bmad/api/dirty loaders"
+
+    def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True):
+        ckpt_name = DirtyLoaderUtils.find_matching_filename(
+            ckpt_name, folder_paths.get_filename_list("checkpoints"))
+
+        loader = nodes.CheckpointLoaderSimple()
+        return loader.load_checkpoint(ckpt_name, output_vae, output_clip)
+
+
+class DirtyLoraLoader:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"model": ("MODEL",),
+                             "clip": ("CLIP",),
+                             "lora_name": ("STRING", {"default": ""}),
+                             "strength_model": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
+                             "strength_clip": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
+                             }}
+
+    RETURN_TYPES = ("MODEL", "CLIP")
+    FUNCTION = "load_lora"
+
+    CATEGORY = "Bmad/api/dirty loaders"
+
+    def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
+        lora_name = DirtyLoaderUtils.find_matching_filename(
+            lora_name, folder_paths.get_filename_list("loras"))
+
+        loader = nodes.LoraLoader()
+        return loader.load_lora(model, clip, lora_name, strength_model, strength_clip)
+
+
+class DirtyHypernetworkLoader:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": { "model": ("MODEL",),
+                              "hypernetwork_name": ("STRING", {"default": ""}),
+                              "strength": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
+                              }}
+    RETURN_TYPES = ("MODEL",)
+    FUNCTION = "load_hypernetwork"
+
+    CATEGORY = "Bmad/api/dirty loaders"
+
+    def load_hypernetwork(self, model, hypernetwork_name, strength):
+        hypernetwork_name = DirtyLoaderUtils.find_matching_filename(
+            hypernetwork_name, folder_paths.get_filename_list("hypernetworks"))
+
+        loader = hyper.HypernetworkLoader()
+        return loader.load_hypernetwork(model, hypernetwork_name, strength)
+
+# endregion : dirty loaders
 
 
 NODE_CLASS_MAPPINGS = {
     "CreateRequestMetadata": CreateRequestMetadata,
-    "SetRequestStateToComplete": SetRequestStateToComplete, 
-    "Get Prompt":GetPrompt,
+    "SetRequestStateToComplete": SetRequestStateToComplete,
+    "Get Prompt": GetPrompt,
     "Save Image 2 ( ! )": SaveImage2,
-    "Load 64 Encoded Image":LoadImage64,
-    "RequestInputs":RequestInputs, 
-    "String to Integer":String2Int,
-    "String to Float":String2Float,
-    "String to WAS_Text":String2WAS_Text
+    "Load 64 Encoded Image": LoadImage64,
+    "RequestInputs": RequestInputs,
+
+    "String to Integer": String2Int,
+    "String to Float": String2Float,
+    "String to WAS_Text": String2WAS_Text,
+
+    "CheckpointLoader (dirty)": DirtyCheckpointLoader,
+    "CheckpointLoaderSimple (dirty)": DirtyCheckpointLoaderSimple,
+    "LoraLoader (dirty)": DirtyLoraLoader,
+    "HypernetworkLoader (dirty)": DirtyHypernetworkLoader,
 }
