@@ -207,62 +207,6 @@ class SetRequestStateToComplete:
         return ()
 
 
-class GetPrompt:
-    prompt_mode = ["print to console", "save to file"]
-
-    def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
-        self.type = "output"
-
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "api_prompt": (s.prompt_mode, {"default": "print to console"})
-        },
-            "hidden": {"prompt": "PROMPT", "unique_id": "UNIQUE_ID"},
-        }
-
-    RETURN_TYPES = ()
-    FUNCTION = "getPrompt"
-    CATEGORY = "Bmad/api"
-    OUTPUT_NODE = True
-
-    def getPrompt(self, api_prompt, prompt, unique_id):
-        # changing the original will mess the prompt execution, therefore make a copy
-        prompt = copy.deepcopy(prompt)
-
-        # remove this node from the prompt
-        this_node = prompt[unique_id]
-        del prompt[unique_id]
-
-        # remove widgtes inputs from RequestInputs, only "values" is needed.
-        for key in prompt:
-            if prompt[key]["class_type"] == "RequestInputs":
-                inputs = prompt[key]["inputs"]
-                for attribute in list(inputs.keys()):
-                    if attribute != "values":
-                        del inputs[attribute]
-                break  # supposes only 1 RequestInputs node exists
-
-        prompt = {"prompt": prompt}
-
-        # print to console or file
-        if api_prompt == "print to console":
-            print(json.dumps(prompt))
-        elif api_prompt == "save to file":
-            # TODO
-            # avoid collisions (maybe just name it w/ date/time prefix?)
-            # instead of owerriding the file
-            file = "prompt.json"
-            file = os.path.join(self.output_dir, file)
-            with open(file, 'w') as f:
-                json.dump(prompt, f, indent=1)
-        else:
-            pass
-
-        return ()
-
-
 class SaveImage2:
     """
     Saves image without storing any metadata using a hexdigest as the name.
@@ -389,6 +333,7 @@ class RequestInputs:
         values = tuple(json.loads(values).values())
         return values
 
+
 # endregion : api core nodes
 
 
@@ -420,6 +365,7 @@ class String2Float:
 
     def convert(self, inStr):
         return (float(inStr),)
+
 
 # endregion : input converters
 
@@ -508,10 +454,11 @@ class DirtyLoraLoader:
 class DirtyHypernetworkLoader:
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": { "model": ("MODEL",),
-                              "hypernetwork_name": ("STRING", {"default": ""}),
-                              "strength": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
-                              }}
+        return {"required": {"model": ("MODEL",),
+                             "hypernetwork_name": ("STRING", {"default": ""}),
+                             "strength": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
+                             }}
+
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "load_hypernetwork"
 
@@ -524,14 +471,124 @@ class DirtyHypernetworkLoader:
         loader = hyper.HypernetworkLoader()
         return loader.load_hypernetwork(model, hypernetwork_name, strength)
 
+
 # endregion : dirty loaders
+
+
+# region : dumpers
+
+class GetModels:
+    dump_option = ['all models',
+                   'checkpoints',
+                   'clip',
+                   'clip_vision',
+                   'configs',
+                   'controlnet',
+                   'diffusers',
+                   'embeddings',
+                   'gligen',
+                   'hypernetworks',
+                   'loras',
+                   'style_models',
+                   'upscale_models',
+                   'vae'
+                   ]
+
+    def __init__(self):
+        self.output_dir = folder_paths.get_output_directory()
+        self.type = "output"
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "dump": (s.dump_option, {"default": "all models"})
+        }
+        }
+
+    RETURN_TYPES = ()
+    FUNCTION = "dump_it"
+    CATEGORY = "Bmad/dump"
+    OUTPUT_NODE = True
+
+    def dump_it(self, dump):
+        dump_data = {}
+
+        if dump == 'all models':
+            for item in self.dump_option[1:]:
+                dump_data[item] = folder_paths.get_filename_list(item)
+        else:
+            dump_data['list'] = folder_paths.get_filename_list(dump)
+
+        file = f"{dump}.json"
+        file = os.path.join(self.output_dir, file)
+        with open(file, 'w') as f:
+            json.dump(dump_data, f, indent=1)
+
+        return ()
+
+
+class GetPrompt:
+    prompt_mode = ["print to console", "save to file"]
+
+    def __init__(self):
+        self.output_dir = folder_paths.get_output_directory()
+        self.type = "output"
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "api_prompt": (s.prompt_mode, {"default": "print to console"})
+        },
+            "hidden": {"prompt": "PROMPT", "unique_id": "UNIQUE_ID"},
+        }
+
+    RETURN_TYPES = ()
+    FUNCTION = "getPrompt"
+    CATEGORY = "Bmad/dump"
+    OUTPUT_NODE = True
+
+    def getPrompt(self, api_prompt, prompt, unique_id):
+        # changing the original will mess the prompt execution, therefore make a copy
+        prompt = copy.deepcopy(prompt)
+
+        # remove this node from the prompt
+        this_node = prompt[unique_id]
+        del prompt[unique_id]
+
+        # remove widgtes inputs from RequestInputs, only "values" is needed.
+        for key in prompt:
+            if prompt[key]["class_type"] == "RequestInputs":
+                inputs = prompt[key]["inputs"]
+                for attribute in list(inputs.keys()):
+                    if attribute != "values":
+                        del inputs[attribute]
+                break  # supposes only 1 RequestInputs node exists
+
+        prompt = {"prompt": prompt}
+
+        # print to console or file
+        if api_prompt == "print to console":
+            print(json.dumps(prompt))
+        elif api_prompt == "save to file":
+            # TODO
+            # avoid collisions (maybe just name it w/ date/time prefix?)
+            # instead of owerriding the file
+            file = "prompt.json"
+            file = os.path.join(self.output_dir, file)
+            with open(file, 'w') as f:
+                json.dump(prompt, f, indent=1)
+        else:
+            pass
+
+        return ()
+
+# endregion : dumpers
 
 
 NODE_CLASS_MAPPINGS = {
     "CreateRequestMetadata": CreateRequestMetadata,
     "SetRequestStateToComplete": SetRequestStateToComplete,
-    "Get Prompt": GetPrompt,
-    "Save Image 2 ( ! )": SaveImage2,
+    "Save Image (api)": SaveImage2,
     "Load 64 Encoded Image": LoadImage64,
     "RequestInputs": RequestInputs,
 
@@ -542,4 +599,7 @@ NODE_CLASS_MAPPINGS = {
     "CheckpointLoaderSimple (dirty)": DirtyCheckpointLoaderSimple,
     "LoraLoader (dirty)": DirtyLoraLoader,
     "HypernetworkLoader (dirty)": DirtyHypernetworkLoader,
+
+    "Get Models": GetModels,
+    "Get Prompt": GetPrompt
 }
