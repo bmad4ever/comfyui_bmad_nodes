@@ -3,8 +3,6 @@ import numpy as np
 import cv2
 from PIL import Image, ImageOps
 
-import os
-import sys
 
 # TODO these nodes return the mask, not the image with the background removed!
 #       this is somewhat misleading. Consider changing the methods names.
