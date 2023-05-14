@@ -55,17 +55,26 @@ __all__ = ['NODE_CLASS_MAPPINGS']
 
 extentions_folder = os.path.join(os.path.dirname(os.path.realpath(__main__.__file__)), "web\extensions\Bmad")
 
-if not os.path.exists(extentions_folder):
-    print('"web\extensions\Bmad" folder is missing, some nodes won\'t work as intended.')
+
 
 print('\n\033[1mFrom Bmad Custom Nodes\033[0m')
+
+if not os.path.exists(extentions_folder):
+    exceptions.append('"web\extensions\Bmad" folder is missing, some nodes won\'t work as intended.')
+
+
 print(f' \033[92mLoaded:')
 for m in loaded:
     print(f'  + {m}')
-print(f' \033[93mNot loaded:')
-for m in not_loaded:
-    print(f'  * {m}')
-print(' \033[91mProblems:')
-for e in exceptions:
-    print(f'  ! {e}')
+
+if len(not_loaded) > 0:
+    print(f' \033[93mNot loaded:')
+    for m in not_loaded:
+        print(f'  * {m}')
+
+if len(exceptions) > 0:
+    print(' \033[91mProblems:')
+    for e in exceptions:
+        print(f'  ! {e}')
+
 print('\033[0m')

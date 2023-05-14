@@ -6,10 +6,17 @@ import numpy as np
 from PIL import Image, ImageOps
 
 
-color255Input = ("INT", {
+color255_INPUT = ("INT", {
     "default": 0,
     "min": 0,
     "max": 255,
+    "step": 1
+})
+
+grid_len_INPUT = ("INT",  {
+    "default": 3,
+    "min": 1,
+    "max": 8,
     "step": 1
 })
 
