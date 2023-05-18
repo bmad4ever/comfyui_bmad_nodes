@@ -278,6 +278,7 @@ class CombineMultipleSelectiveConditioning:
     def combine_conds(self, to_use, combine, **kwargs):
         cond_combine_node = nodes.ConditioningCombine()
 
+        to_use = to_use.copy()
         cond = kwargs[f"c{to_use.pop(0)}"]
         if len(to_use) == 0:
             return (cond, )
