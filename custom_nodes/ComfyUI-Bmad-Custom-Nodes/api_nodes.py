@@ -342,6 +342,10 @@ class RequestInputs:
 # region : input converters
 
 class String2Int:
+    """
+    Under the supposition that this node will receive values from the RequestInputs node,
+     will still work with integer values in the json, as int() cast will work both int and str types.
+    """
 
     @classmethod
     def INPUT_TYPES(s):
@@ -367,6 +371,33 @@ class String2Float:
 
     def convert(self, inStr):
         return (float(inStr),)
+
+
+class InputString2IntArray:
+    """
+    Under the supposition this will be used with RequestInputs, the integers may already come as an array.
+    The input is, therefore, polymorphic and both array and string types are accepted as inputs to both allow a valid
+    request json and a mock array given via the web UI.
+
+    When using a string: the integers should be separated with commas
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"inStr": ("STRING", {"default": ""})}, }
+
+    RETURN_TYPES = ("INT_ARRAY",)
+    FUNCTION = "convert"
+    CATEGORY = "Bmad/api/parseInput"
+
+    def convert(self, inStr):
+        # not really a str, suppose is a list read from the input json
+        if isinstance(inStr, list):
+            return (inStr, )
+
+        # otherwise suppose it is a valid string
+        return ([int(x) for x in inStr.split(',')],)
+
 
 
 # endregion : input converters
@@ -596,6 +627,7 @@ NODE_CLASS_MAPPINGS = {
 
     "String to Integer": String2Int,
     "String to Float": String2Float,
+    "Input/String to Int Array": InputString2IntArray,
 
     "CheckpointLoader (dirty)": DirtyCheckpointLoader,
     "CheckpointLoaderSimple (dirty)": DirtyCheckpointLoaderSimple,

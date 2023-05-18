@@ -43,7 +43,6 @@ class MonoMerge:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "monochromatic_merge"
-
     CATEGORY = "Bmad/image"
 
     def monochromatic_merge(self, image1, image2, target):
@@ -85,7 +84,6 @@ class RepeatIntoGridLatent:
 
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "repeat_into_grid"
-
     CATEGORY = "Bmad/latent"
 
     def repeat_into_grid(self, samples, columns, rows):
@@ -113,7 +111,6 @@ class RepeatIntoGridImage:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "repeat_into_grid"
-
     CATEGORY = "Bmad/image"
 
     def repeat_into_grid(self, image, columns, rows):
@@ -136,7 +133,10 @@ class ConditioningGridCond:
         If you wish to have something between the cells as common ground, lower the strength and set
         the base with the shared elements.
     columns and rows : integer
-        In most cases should not be converted to input.
+        after setting the desired grid size, call the menu option "update inputs" to update
+        the node's conditioning input sockets.
+
+        In most cases, columns and rows, should not be converted to input.
 
         dev note: I've considered disabling columns and rows options to convert to input
         on the javascript side, which (that I am aware) could be done with a modification
@@ -161,7 +161,6 @@ class ConditioningGridCond:
 
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "set_conditioning"
-
     CATEGORY = "Bmad/conditioning"
 
     def set_conditioning(self, base, columns, rows, width, height, strength, **kwargs):
@@ -203,7 +202,6 @@ class ConditioningGridStr:
 
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "set_conditioning"
-
     CATEGORY = "Bmad/conditioning"
 
     def set_conditioning(self, clip, base, columns, rows, width, height, strength, **kwargs):
@@ -220,11 +218,87 @@ class ConditioningGridStr:
         return cond_grid_node.set_conditioning(encoded_base, columns, rows, width, height, strength, **encoded_grid)
 
 
+class CombineMultipleConditioning:
+    """
+    Node to save space and time combining multiple conditioning nodes.
+
+    Set the number of cond inputs to combine in "combine" and then
+    call "update inputs" menu option to set the given number of input sockets.
+    """
+    # TODO: consider implementing similar node for gligen
+
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "combine": ("INT", {"default": 3, "min": 2, "max": 50, "step": 1}),
+        }}
+
+    RETURN_TYPES = ("CONDITIONING",)
+    FUNCTION = "combine_conds"
+    CATEGORY = "Bmad/conditioning"
+
+    def combine_conds(self, combine, **kwargs):
+        cond_combine_node = nodes.ConditioningCombine()
+
+        cond = kwargs["c1"]
+        for c in range(1, combine):
+            new_cond = kwargs[f"c{c+1}"]
+            cond = cond_combine_node.combine(new_cond, cond)[0]
+
+        return (cond,)
+
+
+class CombineMultipleSelectiveConditioning:
+    """
+    Similar to CombineMultipleConditioning, but allows to specify the set of inputs to be combined.
+    I.e. some inputs may be discarded and not contribute to the output.
+
+    The "to_use" is a list of indexes of the inputs to use.
+    """
+
+    # TODO: consider implementing similar node for gligen
+
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "to_use": ("INT_ARRAY", ),
+            "combine": ("INT", {"default": 2, "min": 2, "max": 50, "step": 1}),
+        }}
+
+    RETURN_TYPES = ("CONDITIONING",)
+    FUNCTION = "combine_conds"
+    CATEGORY = "Bmad/conditioning"
+
+    def combine_conds(self, to_use, combine, **kwargs):
+        cond_combine_node = nodes.ConditioningCombine()
+
+        cond = kwargs[f"c{to_use.pop(0)}"]
+        if len(to_use) == 0:
+            return (cond, )
+
+        for i in to_use:
+            new_cond = kwargs[f"c{i}"]
+            cond = cond_combine_node.combine(new_cond, cond)[0]
+
+        return (cond,)
+
+
+
 NODE_CLASS_MAPPINGS = {
     "Color Clip RGB": ColorClipRGB,
     "MonoMerge": MonoMerge,
+
     "Repeat Into Grid (latent)": RepeatIntoGridLatent,
     "Repeat Into Grid (image)": RepeatIntoGridImage,
+
     "Conditioning Grid (cond)": ConditioningGridCond,
     "Conditioning Grid (string)": ConditioningGridStr,
+    "Conditioning (combine multiple)": CombineMultipleConditioning,
+    "Conditioning (combine selective)": CombineMultipleSelectiveConditioning
 }

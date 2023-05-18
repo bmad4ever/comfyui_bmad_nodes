@@ -7,7 +7,7 @@ exceptions = []
 
 try:
     from .api_nodes import NODE_CLASS_MAPPINGS as api
-    loaded.append("api nodes")
+    loaded.append(f"api nodes ({len([*api])})")
 except Exception as e:
     repeat = {}
     not_loaded.append("api nodes")
@@ -15,7 +15,7 @@ except Exception as e:
 
 try:
     from .simple_utilities import NODE_CLASS_MAPPINGS as simple
-    loaded.append("simple utility nodes")
+    loaded.append(f"simple utility nodes ({len([*simple])})")
 except Exception as e:
     cc_ade20k = {}
     exceptions.append(e)
@@ -23,7 +23,7 @@ except Exception as e:
 
 try:
     from .grabcut_nodes import NODE_CLASS_MAPPINGS as grab
-    loaded.append("grab cut nodes")
+    loaded.append(f"grab cut nodes ({len([*grab])})")
 except Exception as e:
     grab = {}
     not_loaded.append("grab cut nodes")
@@ -31,7 +31,7 @@ except Exception as e:
 
 try:
     from .color_clip_ade20k import NODE_CLASS_MAPPINGS as cc_ade20k
-    loaded.append("color clip ade20k node")
+    loaded.append("color clip ade20k node (1)")
 except Exception as e:
     cc_ade20k = {}
     exceptions.append(e)
@@ -39,7 +39,7 @@ except Exception as e:
 
 try:
     from .otsu_threshold_node import NODE_CLASS_MAPPINGS as otsu
-    loaded.append("otsu filter node")
+    loaded.append("otsu filter node (1)")
 except Exception as e:
     otsu = {}
     not_loaded.append("otsu filter node")
@@ -63,7 +63,7 @@ if not os.path.exists(extentions_folder):
     exceptions.append('"web\extensions\Bmad" folder is missing, some nodes won\'t work as intended.')
 
 
-print(f' \033[92mLoaded:')
+print(f' \033[92mLoaded {len([*NODE_CLASS_MAPPINGS])} nodes:')
 for m in loaded:
     print(f'  + {m}')
 
