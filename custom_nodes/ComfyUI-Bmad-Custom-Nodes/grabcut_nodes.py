@@ -244,8 +244,8 @@ class FramedMaskGrabCut2:
         fg_model = np.zeros((1, 65), dtype="float")
         bg_model = np.zeros((1, 65), dtype="float")
         mask = np.zeros(image.shape[:2], dtype=np.uint8)
-        mask[thresh_sure == 0] = cv2.GC_PR_BGD  # probable background
-        mask[thresh_maybe == 255] = cv2.GC_PR_FGD  # probable foreground
+        mask[thresh_sure != 255] = cv2.GC_PR_BGD  # probable background
+        mask[thresh_maybe != 0] = cv2.GC_PR_FGD  # probable foreground
         mask[thresh_sure == 255] = cv2.GC_FGD  # foreground
 
         frame_option = self.frame_options_values[frame_option]
