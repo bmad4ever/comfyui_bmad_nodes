@@ -7,6 +7,19 @@ from nodes import *
 from .dry import *
 
 
+class StringNode:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"inStr": ("STRING", {"default": ""})}, }
+
+    RETURN_TYPES = ("String",)
+    FUNCTION = "pass_it"
+    CATEGORY = "Bmad"
+
+    def pass_it(self, inStr):
+        return (inStr,)
+
+
 class ColorClipRGB(ColorClip):
     @classmethod
     def INPUT_TYPES(s):
@@ -292,6 +305,8 @@ class CombineMultipleSelectiveConditioning:
 
 
 NODE_CLASS_MAPPINGS = {
+    "String": StringNode,
+
     "Color Clip RGB": ColorClipRGB,
     "MonoMerge": MonoMerge,
 
