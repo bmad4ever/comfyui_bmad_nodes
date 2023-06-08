@@ -12,7 +12,7 @@ class StringNode:
     def INPUT_TYPES(s):
         return {"required": {"inStr": ("STRING", {"default": ""})}, }
 
-    RETURN_TYPES = ("String",)
+    RETURN_TYPES = ("STRING",)
     FUNCTION = "pass_it"
     CATEGORY = "Bmad"
 
