@@ -288,7 +288,7 @@ class CombineMultipleSelectiveConditioning:
     FUNCTION = "combine_conds"
     CATEGORY = "Bmad/conditioning"
 
-    def combine_conds(self, to_use, combine, **kwargs):
+    def combine_conds(self, to_use, **kwargs):
         cond_combine_node = nodes.ConditioningCombine()
 
         to_use = to_use.copy()
@@ -303,6 +303,42 @@ class CombineMultipleSelectiveConditioning:
         return (cond,)
 
 
+class AddString2Many:
+    """
+    Append or prepend a string to other, many, strings.
+    """
+
+    OPERATION = ["append", "prepend"]
+
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "to_add": ("STRING", {"default": '', "multiline": False}),
+            "inputs_len": ("INT", {"default": 3, "min": 2, "max": 32, "step": 1}),
+            "operation": (s.OPERATION, {"default": 'append'}),
+        }}
+
+    RETURN_TYPES = tuple(["STRING" for x in range(32)])
+    FUNCTION = "add_str"
+    CATEGORY = "Bmad/conditioning"
+
+    def add_str(self, to_add, inputs_len, operation, **kwargs):
+        new_strs = []
+        for r in range(inputs_len):
+            str_input_name = f"i{r+1}"
+            new_str = kwargs[str_input_name]
+            if operation == "append":
+                new_str = new_str + to_add
+            else:
+                new_str = to_add + new_str
+            new_strs.append(new_str)
+
+        return tuple(new_strs)
+
+
 
 NODE_CLASS_MAPPINGS = {
     "String": StringNode,
@@ -315,6 +351,8 @@ NODE_CLASS_MAPPINGS = {
 
     "Conditioning Grid (cond)": ConditioningGridCond,
     "Conditioning Grid (string)": ConditioningGridStr,
-    "Conditioning (combine multiple)": CombineMultipleConditioning,
-    "Conditioning (combine selective)": CombineMultipleSelectiveConditioning
+    #"Conditioning (combine multiple)": CombineMultipleConditioning, (missing javascript)
+    #"Conditioning (combine selective)": CombineMultipleSelectiveConditioning (missing javascript),
+
+    "Add String To Many": AddString2Many
 }

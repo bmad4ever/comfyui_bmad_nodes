@@ -45,11 +45,19 @@ except Exception as e:
     not_loaded.append("otsu filter node")
     exceptions.append(e)
 
+try:
+    from .extension_dependant_utilities import NODE_CLASS_MAPPINGS as extended
+    loaded.append(f"extension dependent nodes ({len([*extended])})")
+except Exception as e:
+    extended = {}
+    not_loaded.append("api nodes")
+    exceptions.append(e)
+
 
 import __main__
 import os
 
-NODE_CLASS_MAPPINGS = {**api, **simple, **grab, **cc_ade20k, **otsu}
+NODE_CLASS_MAPPINGS = {**api, **simple, **grab, **cc_ade20k, **otsu, **extended}
 
 __all__ = ['NODE_CLASS_MAPPINGS']
 
