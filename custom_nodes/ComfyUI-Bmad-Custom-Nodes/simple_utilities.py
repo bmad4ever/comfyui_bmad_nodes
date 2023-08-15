@@ -1,9 +1,6 @@
-import torch
-import numpy as np
-from PIL import Image, ImageOps
+from PIL import ImageColor
 
 import nodes
-from nodes import *
 from .dry import *
 
 
@@ -20,23 +17,20 @@ class StringNode:
         return (inStr,)
 
 
-class ColorClipRGB(ColorClip):
+class ColorClip(ColorClip):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                 "image": ("IMAGE",),
-                "red": color255_INPUT,
-                "green": color255_INPUT,
-                "blue": color255_INPUT,
+                "color": ("COLOR",),
                 "target": (s.OPERATION, {"default": 'TO_WHITE'}),
                 "complement": (s.OPERATION, {"default": 'TO_BLACK'})
             },
         }
 
-    def color_clip(self, image, red, green, blue, target, complement):
-        clip_color = (red, green, blue)
-        image = self.clip(image, clip_color, target, complement)
+    def color_clip(self, image, color, target, complement):
+        image = self.clip(image, ImageColor.getcolor(color, "RGB"), target, complement)
         return (image,)
 
 
@@ -49,7 +43,10 @@ class MonoMerge:
             "required": {
                 "image1": ("IMAGE",),
                 "image2": ("IMAGE",),
-                "target": (s.target, {"default": "white"})
+                "target": (s.target, {"default": "white"}),
+                "output_format": (image_output_formats_options, {
+                    "default": image_output_formats_options[0]
+                })
                 ,
             },
         }
@@ -58,12 +55,9 @@ class MonoMerge:
     FUNCTION = "monochromatic_merge"
     CATEGORY = "Bmad/image"
 
-    def monochromatic_merge(self, image1, image2, target):
-        image1 = 255. * image1[0].cpu().numpy()
-        image2 = 255. * image2[0].cpu().numpy()
-
-        # Check if images have the same dimensions
-        assert image1.shape == image2.shape, "Images must have the same dimensions"
+    def monochromatic_merge(self, image1, image2, target, output_format):
+        image1 = tensor2opencv(image1, 1)
+        image2 = tensor2opencv(image2, 1)
 
         # Select the lesser L component at each pixel
         if target == "white":
@@ -71,11 +65,8 @@ class MonoMerge:
         else:
             image = np.minimum(image1, image2)
 
-        # Convert to PIL image
-        image = Image.fromarray(np.clip(image, 0, 255).astype(np.uint8))
-        image = image.convert("RGB")
-        image = np.array(image).astype(np.float32) / 255.0
-        image = torch.from_numpy(image)[None,]
+        image = maybe_convert_img(image, 1, image_output_formats_options_map[output_format])
+        image = opencv2tensor(image)
 
         return (image,)
 
@@ -339,11 +330,23 @@ class AddString2Many:
         return tuple(new_strs)
 
 
+class AdjustRect:
+    #TODO to be implemented
+    round_mode_map = {
+        'Floor': 1,  # may be close to the image's edge, keep rect tight
+        'Ceil': 2,  # need the margin and image's edges aren't near
+        'Round': 3,  # whatever fits closest to the original rect
+    }
+    round_modes = list(round_mode_map.keys())
+
+
+
+
 
 NODE_CLASS_MAPPINGS = {
     "String": StringNode,
 
-    "Color Clip RGB": ColorClipRGB,
+    "Color Clip": ColorClip,
     "MonoMerge": MonoMerge,
 
     "Repeat Into Grid (latent)": RepeatIntoGridLatent,
