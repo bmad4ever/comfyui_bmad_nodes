@@ -3,7 +3,7 @@
 from abc import abstractmethod
 import torch
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image
 
 
 color255_INPUT = ("INT", {
@@ -61,3 +61,71 @@ class ColorClip:
         image = torch.from_numpy(image)[None,]
 
         return image
+
+
+image_output_formats_options_map = {
+    "RGB": 3,
+    "GRAY": 1
+}
+image_output_formats_options = list(image_output_formats_options_map.keys())
+
+def tensor2opencv(image_tensor, out_format_number_of_channels=3):
+    """
+    Args:
+        image_tensor: tensor containing the image data.
+        out_format_number_of_channels: 3 for 'RGB' (default); 4 for 'RGBA' ; 1 for 'GRAY'
+    Returns: Numpy int8 array with a RGB24 encoded image
+    """
+    accepted_out_formats = [1, 3, 4]
+    if not out_format_number_of_channels in accepted_out_formats:
+        raise ValueError(f"out_format_number_of_channels = {out_format_number_of_channels}, must be one of the "
+                         f"following values: {accepted_out_formats}")
+
+    img = np.clip(255. * image_tensor.cpu().numpy().squeeze(), 0, 255).astype(np.uint8)
+    in_format_NoC = 1 if len(list(image_tensor.size())) == 3 else image_tensor.size(dim=3)
+    img = maybe_convert_img(img, in_format_NoC, out_format_number_of_channels)
+
+    return img
+
+
+def maybe_convert_img(img, src_format_number_of_channels, dst_format_number_of_channels):
+    """
+    Auxiliary method to convert images between the formats: RGB24 ; GRAY8 ; and RGBA32.
+    If the number of channels of both formats is the same, the original img is returned unchanged.
+    Args:
+        img: numpy int8 array with the image
+        dst_format_number_of_channels: number of channels of img 
+        src_format_number_of_channels: target number of channels 
+    Returns:
+        Image in the target format (RGB24, GRAY8 or RGBA32).
+    """
+    import cv2 as cv
+    if dst_format_number_of_channels == src_format_number_of_channels:
+        return img
+    if dst_format_number_of_channels == 3:
+        match src_format_number_of_channels:
+            case 1:
+                return cv.cvtColor(img, cv.COLOR_GRAY2RGB)
+            case 4:
+                return cv.cvtColor(img, cv.COLOR_RGBA2RGB)
+    if dst_format_number_of_channels == 1:
+        match src_format_number_of_channels:
+            case 3:
+                return cv.cvtColor(img, cv.COLOR_RGB2GRAY)
+            case 4:
+                return cv.cvtColor(img, cv.COLOR_RGBA2GRAY)
+    if dst_format_number_of_channels == 4:
+        match src_format_number_of_channels:
+            case 1:
+                return cv.cvtColor(img, cv.COLOR_GRAY2RGBA)
+            case 3:
+                return cv.cvtColor(img, cv.COLOR_RGB2RGBA)
+    print("Case not considered for given number of channels: "
+        f"source={dst_format_number_of_channels} and target={src_format_number_of_channels}.")
+    return None
+
+
+def opencv2tensor(image):
+    """ supposes the image is stored as an int8 numpy array; does not check for the image format """
+    return torch.from_numpy(image.astype(np.float32) / 255.0).unsqueeze(0)
+
