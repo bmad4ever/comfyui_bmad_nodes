@@ -22,11 +22,11 @@ except Exception as e:
     not_loaded.append("simple utility nodes")
 
 try:
-    from .grabcut_nodes import NODE_CLASS_MAPPINGS as grab
-    loaded.append(f"grab cut nodes ({len([*grab])})")
+    from .cv_nodes import NODE_CLASS_MAPPINGS as cv_nodes
+    loaded.append(f"CV nodes ({len([*cv_nodes])})")
 except Exception as e:
     grab = {}
-    not_loaded.append("grab cut nodes")
+    not_loaded.append("CV nodes")
     exceptions.append(e)
 
 try:
@@ -57,7 +57,7 @@ except Exception as e:
 import __main__
 import os
 
-NODE_CLASS_MAPPINGS = {**api, **simple, **grab, **cc_ade20k, **otsu, **extended}
+NODE_CLASS_MAPPINGS = {**api, **simple, **cv_nodes, **cc_ade20k, **otsu, **extended}
 
 __all__ = ['NODE_CLASS_MAPPINGS']
 
