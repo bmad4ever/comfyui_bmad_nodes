@@ -155,13 +155,13 @@ class ConditioningGridCond:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                             "columns": grid_len_INPUT,
-                             "rows": grid_len_INPUT,
-                             "width": ("INT", {"default": 256, "min": 16, "max": 2048, "step": 1}),
-                             "height": ("INT", {"default": 256, "min": 16, "max": 2048, "step": 1}),
-                             "strength": ("FLOAT", {"default": 3, }),
-                             "base": ("CONDITIONING",)
-                             }}
+            "columns": grid_len_INPUT,
+            "rows": grid_len_INPUT,
+            "width": ("INT", {"default": 256, "min": 16, "max": 2048, "step": 1}),
+            "height": ("INT", {"default": 256, "min": 16, "max": 2048, "step": 1}),
+            "strength": ("FLOAT", {"default": 3, }),
+            "base": ("CONDITIONING",)
+        }}
 
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "set_conditioning"
@@ -171,12 +171,12 @@ class ConditioningGridCond:
         cond = base
         cond_set_area_node = nodes.ConditioningSetArea()
         cond_combine_node = nodes.ConditioningCombine()
-        
+
         for r in range(rows):
             for c in range(columns):
-                arg_name = f"r{r+1}_c{c+1}"
+                arg_name = f"r{r + 1}_c{c + 1}"
                 new_cond = kwargs[arg_name]
-                new_cond_area = cond_set_area_node.append(new_cond, width, height, c*width, r*height, strength)[0]
+                new_cond_area = cond_set_area_node.append(new_cond, width, height, c * width, r * height, strength)[0]
                 new_cond = cond_combine_node.combine(new_cond_area, cond)[0]
 
                 cond = new_cond
@@ -216,7 +216,7 @@ class ConditioningGridStr:
         encoded_grid = {}
         for r in range(rows):
             for c in range(columns):
-                cell = f"r{r+1}_c{c+1}"
+                cell = f"r{r + 1}_c{c + 1}"
                 encoded_grid[cell] = text_encode_node.encode(clip, kwargs[cell])[0]
 
         return cond_grid_node.set_conditioning(encoded_base, columns, rows, width, height, strength, **encoded_grid)
@@ -229,6 +229,7 @@ class CombineMultipleConditioning:
     Set the number of cond inputs to combine in "combine" and then
     call "update inputs" menu option to set the given number of input sockets.
     """
+
     # TODO: consider implementing similar node for gligen
 
     def __init__(self):
@@ -249,7 +250,7 @@ class CombineMultipleConditioning:
 
         cond = kwargs["c1"]
         for c in range(1, combine):
-            new_cond = kwargs[f"c{c+1}"]
+            new_cond = kwargs[f"c{c + 1}"]
             cond = cond_combine_node.combine(new_cond, cond)[0]
 
         return (cond,)
@@ -271,7 +272,7 @@ class CombineMultipleSelectiveConditioning:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "to_use": ("INT_ARRAY", ),
+            "to_use": ("INT_ARRAY",),
             "combine": ("INT", {"default": 2, "min": 2, "max": 50, "step": 1}),
         }}
 
@@ -285,7 +286,7 @@ class CombineMultipleSelectiveConditioning:
         to_use = to_use.copy()
         cond = kwargs[f"c{to_use.pop(0)}"]
         if len(to_use) == 0:
-            return (cond, )
+            return (cond,)
 
         for i in to_use:
             new_cond = kwargs[f"c{i}"]
@@ -319,7 +320,7 @@ class AddString2Many:
     def add_str(self, to_add, inputs_len, operation, **kwargs):
         new_strs = []
         for r in range(inputs_len):
-            str_input_name = f"i{r+1}"
+            str_input_name = f"i{r + 1}"
             new_str = kwargs[str_input_name]
             if operation == "append":
                 new_str = new_str + to_add
@@ -331,7 +332,7 @@ class AddString2Many:
 
 
 class AdjustRect:
-    #TODO to be implemented
+    # TODO to be implemented
     round_mode_map = {
         'Floor': 1,  # may be close to the image's edge, keep rect tight
         'Ceil': 2,  # need the margin and image's edges aren't near
@@ -340,7 +341,34 @@ class AdjustRect:
     round_modes = list(round_mode_map.keys())
 
 
+class VAEEncodeBatch:
+    def __init__(self):
+        pass
 
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "inputs_len": ("INT", {"default": 3, "min": 2, "max": 32, "step": 1}),
+            "vae": ("VAE",)
+        }}
+
+    RETURN_TYPES = ("LATENT",)
+    FUNCTION = "encode"
+    CATEGORY = "Bmad"
+
+    def encode(self, inputs_len, vae, **kwargs):
+        vae_encoder = nodes.VAEEncode()
+
+        def get_latent(input_name):
+            pixels = kwargs[input_name]
+            pixels = vae_encoder.vae_encode_crop_pixels(pixels)
+            return vae.encode(pixels[:, :, :, :3])
+
+        latent = get_latent("image_1")
+        for r in range(1, inputs_len):
+            latent = torch.cat([latent, get_latent(f"image_{r + 1}")], dim=0)
+
+        return ({"samples": latent},)
 
 
 NODE_CLASS_MAPPINGS = {
@@ -354,8 +382,10 @@ NODE_CLASS_MAPPINGS = {
 
     "Conditioning Grid (cond)": ConditioningGridCond,
     "Conditioning Grid (string)": ConditioningGridStr,
-    #"Conditioning (combine multiple)": CombineMultipleConditioning, (missing javascript)
-    #"Conditioning (combine selective)": CombineMultipleSelectiveConditioning (missing javascript),
+    # "Conditioning (combine multiple)": CombineMultipleConditioning, (missing javascript)
+    # "Conditioning (combine selective)": CombineMultipleSelectiveConditioning (missing javascript),
 
-    "Add String To Many": AddString2Many
+    "Add String To Many": AddString2Many,
+
+    "VAEEncodeBatch": VAEEncodeBatch
 }
