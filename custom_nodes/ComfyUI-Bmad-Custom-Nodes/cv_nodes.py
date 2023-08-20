@@ -437,7 +437,6 @@ class ContourGetBoundingRect:
 
     RETURN_TYPES = tuple(["INT" for x in range(4)])
     FUNCTION = "compute"
-
     CATEGORY = "Bmad/CV/Contour"
 
     def compute(self, contour, return_mode):
@@ -447,6 +446,157 @@ class ContourGetBoundingRect:
 
         return self.rect_modes_map[return_mode](self, *cv.boundingRect(contour))
 
+
+class FilterContour:
+    return_modes_map = {
+        "MAX": lambda l: -1,
+        "MIN": lambda l: 0,
+        "MODE": lambda l: len(l)//2
+    }
+    return_modes = list(return_modes_map.keys())
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "contours": ("CV_CONTOURS",),
+                "fitness": ("STRING", {"multiline": True, "default":
+                    "# Contour Fitness Function\n"}),
+                "select": (s.return_modes, {"default": s.return_modes[0]})
+            },
+            "optional": {
+                "image": ("IMAGE", )
+            }
+        }
+
+    RETURN_TYPES = ("CV_CONTOUR", )
+    FUNCTION = "filter"
+    CATEGORY = "Bmad/CV/Contour"
+
+    def filter(self, contours, fitness, select, image=None):
+        import math
+        import cv2
+        import numpy
+        import re
+
+        # region prepare inputs
+        if image is not None:
+            image = tensor2opencv(image)
+
+        # better be safe than sorry, but may not be enough
+        for item in ["exec", "import", "eval", "lambda", "name", "class", "bases"]:
+            fitness = fitness.replace(item, "")
+
+        # remove comments and new lines
+        fitness = re.sub('#.+', '', fitness)
+        fitness = re.sub('\n', '', fitness)
+        # endregion
+
+        #region available functions
+        # cv methods, but cache them
+        @cache_with_ids(single=False)
+        def boundingRect(cnt):
+            return cv.boundingRect(cnt)
+
+        @cache_with_ids(single=False)
+        def contourArea(cnt):
+            return cv.contourArea(cnt)
+
+        @cache_with_ids(single=False)
+        def arcLength(cnt):
+            return cv.arcLength(cnt, True)
+
+        @cache_with_ids(single=True)
+        def minAreaRect(cnt):
+            return cv.minAreaRect(cnt)
+
+        @cache_with_ids(single=True)
+        def minEnclosingCircle(cnt):
+            return cv.minEnclosingCircle(cnt)
+
+        @cache_with_ids(single=True)
+        def fitEllipse(cnt):
+            return cv.fitEllipse(cnt)
+
+        @cache_with_ids(single=True)
+        def convexHull(cnt):
+            return cv.convexHull(cnt)
+
+        # useful properties; adapted from multiple sources, including cv documentation
+        @cache_with_ids(single=True)
+        def aspect_ratio(cnt):
+            x, y, w, h = boundingRect(cnt)
+            return float(w) / h
+
+        @cache_with_ids(single=True)
+        def extent(cnt):
+            area = contourArea(cnt)
+            x, y, w, h = boundingRect(cnt)
+            rect_area = w * h
+            return float(area) / rect_area
+
+        @cache_with_ids(single=True)
+        def solidity(cnt):
+            area = contourArea(cnt)
+            hull = convexHull(cnt)
+            hull_area = contourArea(hull)
+            return float(area) / hull_area
+
+        @cache_with_ids(single=True)
+        def equi_diameter(cnt):
+            area = contourArea(cnt)
+            return math.sqrt(4 * area / math.pi)
+
+        @cache_with_ids(single=True)
+        def center(cnt):
+            M = cv.moments(cnt)
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+            return cX, cY
+
+        @cache_with_ids(single=False)
+        def contour_mask(cnt, img):
+            if len(img.shape) > 2:
+                height, width, channels = img.shape
+            else:
+                height, width = img.shape
+
+            mask = numpy.zeros((height, width, 1), numpy.uint8)
+            cv.drawContours(mask, [cnt], 0, 255, -1)
+            cv.imwrite("test_img.png", mask)
+            return mask
+
+        @cache_with_ids(single=True)
+        def mean_color(cnt, img):
+            return cv.mean(img, mask=contour_mask(cnt, img))
+
+        @cache_with_ids(single=True)
+        def mean_intensity(cnt, img):
+            gray = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
+            return mean_color(cnt, gray)[0]
+
+        @cache_with_ids(single=True)
+        def extreme_points(cnt):
+            l = tuple(cnt[cnt[:, :, 0].argmin()][0])
+            r = tuple(cnt[cnt[:, :, 0].argmax()][0])
+            t = tuple(cnt[cnt[:, :, 1].argmin()][0])
+            b = tuple(cnt[cnt[:, :, 1].argmax()][0])
+            return {"top": t, "right": r, "bottom": b, "left": l}
+        # endregion
+
+        available_funcs = {}
+        for key, value in locals().items():
+            if callable(value):
+                available_funcs[key] = value
+
+        fitness = eval(f"lambda c, i: {fitness}", {
+            "__builtins__": {},
+            'm': math, 'cv': cv2, 'np': numpy,
+            **available_funcs
+        }, {})
+
+        sorted_contours = sorted(contours, key=lambda c: fitness(c, image))
+        return (sorted_contours[ self.return_modes_map[select](sorted_contours) ], )
 
 # endregion contour nodes
 
@@ -460,4 +610,5 @@ NODE_CLASS_MAPPINGS = {
     "Draw Contour(s)": DrawContours,
     "Get Contour from list": GetContourFromList,
     "BoundingRect (contours)": ContourGetBoundingRect,
+    "Filter Contour": FilterContour
 }
