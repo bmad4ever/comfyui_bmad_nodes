@@ -1,3 +1,5 @@
+import math
+
 from PIL import ImageColor
 
 import nodes
@@ -332,13 +334,48 @@ class AddString2Many:
 
 
 class AdjustRect:
-    # TODO to be implemented
     round_mode_map = {
-        'Floor': 1,  # may be close to the image's edge, keep rect tight
-        'Ceil': 2,  # need the margin and image's edges aren't near
-        'Round': 3,  # whatever fits closest to the original rect
+        'Floor': math.floor,  # may be close to the image's edge, keep rect tight
+        'Ceil': math.ceil,  # need the margin and image's edges aren't near
+        'Round': round,  # whatever fits closest to the original rect
     }
     round_modes = list(round_mode_map.keys())
+
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "x1": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
+            "y1": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
+            "x2": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
+            "y2": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
+            "xm": ("INT", {"default": 64, "min": 2, "max": 256, "step": 2}),
+            "ym": ("INT", {"default": 64, "min": 2, "max": 256, "step": 2}),
+            "round_mode": (s.round_modes, {"default": s.round_modes[2]})
+        }}
+
+    RETURN_TYPES = tuple(["INT" for x in range(4)])
+    FUNCTION = "adjust"
+    CATEGORY = "Bmad"
+
+    def adjust(self, x1, y1, x2, y2, xm, ym, round_mode):
+        center_x = (x1 + x2) // 2
+        center_y = (y1 + y2) // 2
+        print(f"y1 {y1}, y2 {y2}")
+        half_new_len_x = self.round_mode_map[round_mode]( (x2-x1)/xm )*xm//2
+        half_new_len_y = self.round_mode_map[round_mode]( (y2-y1)/ym )*ym//2
+
+        # note: these points can fall outside the image space
+        x2 = x1 = center_x
+        x2 += half_new_len_x
+        x1 -= half_new_len_x
+        y2 = y1 = center_y
+        y2 += half_new_len_y
+        y1 -= half_new_len_y
+
+        return (x1, y1, x2, y2, )
 
 
 class VAEEncodeBatch:
@@ -373,6 +410,7 @@ class VAEEncodeBatch:
 
 NODE_CLASS_MAPPINGS = {
     "String": StringNode,
+    "Add String To Many": AddString2Many,
 
     "Color Clip": ColorClip,
     "MonoMerge": MonoMerge,
@@ -385,7 +423,7 @@ NODE_CLASS_MAPPINGS = {
     # "Conditioning (combine multiple)": CombineMultipleConditioning, (missing javascript)
     # "Conditioning (combine selective)": CombineMultipleSelectiveConditioning (missing javascript),
 
-    "Add String To Many": AddString2Many,
+    "AdjustRect": AdjustRect,
 
     "VAEEncodeBatch": VAEEncodeBatch
 }
