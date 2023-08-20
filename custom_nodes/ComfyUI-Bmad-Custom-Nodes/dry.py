@@ -129,3 +129,29 @@ def opencv2tensor(image):
     """ supposes the image is stored as an int8 numpy array; does not check for the image format """
     return torch.from_numpy(image.astype(np.float32) / 255.0).unsqueeze(0)
 
+
+def cache_with_ids(single: bool = False):
+    def decorator(func):
+        cache = {}
+
+        def wrapper(*args, **kwargs):
+            id_args = tuple(map(id, args))
+            if id_args in cache:
+                # cache hit
+                return cache[id_args]
+            else:
+                # cache miss
+                if single:  # only keep the last cached
+                    cache.clear()
+                result = func(*args, **kwargs)
+                cache[id_args] = result
+                return result
+
+        def clear_cache():
+            cache.clear()
+
+        wrapper.cache_clear = clear_cache  # Attach the clear_cache function
+
+        return wrapper
+
+    return decorator
