@@ -1,4 +1,5 @@
 import cv2 as cv
+import numpy as np
 from PIL import ImageColor
 from .dry import *
 
@@ -465,7 +466,8 @@ class FilterContour:
                 "select": (s.return_modes, {"default": s.return_modes[0]})
             },
             "optional": {
-                "image": ("IMAGE", )
+                "image": ("IMAGE", ),
+                "aux_contour": ("CV_CONTOUR", )
             }
         }
 
@@ -473,7 +475,7 @@ class FilterContour:
     FUNCTION = "filter"
     CATEGORY = "Bmad/CV/Contour"
 
-    def filter(self, contours, fitness, select, image=None):
+    def filter(self, contours, fitness, select, image=None, aux_contour=None):
         import math
         import cv2
         import numpy
@@ -589,14 +591,41 @@ class FilterContour:
             if callable(value):
                 available_funcs[key] = value
 
-        fitness = eval(f"lambda c, i: {fitness}", {
+        fitness = eval(f"lambda c, i, a: {fitness}", {
             "__builtins__": {},
             'm': math, 'cv': cv2, 'np': numpy,
             **available_funcs
         }, {})
 
-        sorted_contours = sorted(contours, key=lambda c: fitness(c, image))
+        sorted_contours = sorted(contours, key=lambda c: fitness(c, image, aux_contour))
         return (sorted_contours[ self.return_modes_map[select](sorted_contours) ], )
+
+
+class ContourToMask:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "contour": ("CV_CONTOUR",),
+                "output_format": (image_output_formats_options, {
+                    "default": image_output_formats_options[0]
+                })
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE", )
+    FUNCTION = "draw"
+    CATEGORY = "Bmad/CV/Contour"
+
+    def draw(self, image, contour, output_format):
+        image = tensor2opencv(image, 1)
+        image = np.zeros(image.shape, dtype=np.uint8)
+        cv.drawContours(image, [contour], 0, (255), -1)
+        image = maybe_convert_img(image, 1, image_output_formats_options_map[output_format])
+        image = opencv2tensor(image)
+        return (image, )
+
 
 # endregion contour nodes
 
@@ -610,5 +639,6 @@ NODE_CLASS_MAPPINGS = {
     "Draw Contour(s)": DrawContours,
     "Get Contour from list": GetContourFromList,
     "BoundingRect (contours)": ContourGetBoundingRect,
-    "Filter Contour": FilterContour
+    "Filter Contour": FilterContour,
+    "Contour To Mask": ContourToMask,
 }
