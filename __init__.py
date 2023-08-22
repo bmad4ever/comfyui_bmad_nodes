@@ -56,20 +56,18 @@ except Exception as e:
 
 import __main__
 import os
+import nodes
 
 NODE_CLASS_MAPPINGS = {**api, **simple, **cv_nodes, **cc_ade20k, **otsu, **extended}
+WEB_DIRECTORY = "js"
 
 __all__ = ['NODE_CLASS_MAPPINGS']
-
-extentions_folder = os.path.join(os.path.dirname(os.path.realpath(__main__.__file__)), "web\extensions\Bmad")
-
 
 
 print('\n\033[1mFrom Bmad Custom Nodes\033[0m')
 
-if not os.path.exists(extentions_folder):
-    exceptions.append('"web\extensions\Bmad" folder is missing, some nodes won\'t work as intended.')
-
+if not hasattr(nodes, "EXTENSION_WEB_DIRS"):
+   exceptions.append(f"The version of ComfyUI is outdated. Some nodes won't work as intended.")
 
 print(f' \033[92mLoaded {len([*NODE_CLASS_MAPPINGS])} nodes:')
 for m in loaded:
