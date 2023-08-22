@@ -486,7 +486,8 @@ class FilterContour:
             image = tensor2opencv(image)
 
         # better be safe than sorry, but may not be enough
-        for item in ["exec", "import", "eval", "lambda", "name", "class", "bases"]:
+        for item in ["exec", "import", "eval", "lambda", "name", "class", "bases",
+                     "write", "save", "store", "read", "open", "load", "from", "file"]:
             fitness = fitness.replace(item, "")
 
         # remove comments and new lines
