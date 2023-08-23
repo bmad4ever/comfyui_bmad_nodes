@@ -338,6 +338,7 @@ class AdjustRect:
         'Floor': math.floor,  # may be close to the image's edge, keep rect tight
         'Ceil': math.ceil,  # need the margin and image's edges aren't near
         'Round': round,  # whatever fits closest to the original rect
+        'Exact': lambda v: 1  # force exact measurement
     }
     round_modes = list(round_mode_map.keys())
 
@@ -361,9 +362,15 @@ class AdjustRect:
     CATEGORY = "Bmad"
 
     def adjust(self, x1, y1, x2, y2, xm, ym, round_mode):
-        center_x = (x1 + x2) // 2
-        center_y = (y1 + y2) // 2
-        print(f"y1 {y1}, y2 {y2}")
+        center_x = (x1 + x2) // 2 + 1
+        center_y = (y1 + y2) // 2 + 1
+        # reasoning:
+        # 00 01 02 03 04 05
+        # __ -- -- -- -- __ ( original len of 4 )
+        # __ x1 __ cx __ x2 ( target len of 4   )
+        # most crop implementations include x1 but exclude x2;
+        # thus is closer to original input
+
         half_new_len_x = self.round_mode_map[round_mode]( (x2-x1)/xm )*xm//2
         half_new_len_y = self.round_mode_map[round_mode]( (y2-y1)/ym )*ym//2
 
