@@ -352,8 +352,8 @@ class AdjustRect:
             "y1": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
             "x2": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
             "y2": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
-            "xm": ("INT", {"default": 64, "min": 2, "max": 256, "step": 2}),
-            "ym": ("INT", {"default": 64, "min": 2, "max": 256, "step": 2}),
+            "xm": ("INT", {"default": 64, "min": 2, "max": 1280, "step": 2}),
+            "ym": ("INT", {"default": 64, "min": 2, "max": 1280, "step": 2}),
             "round_mode": (s.round_modes, {"default": s.round_modes[2]})
         }}
 
