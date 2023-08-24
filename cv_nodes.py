@@ -479,20 +479,12 @@ class FilterContour:
         import math
         import cv2
         import numpy
-        import re
 
         # region prepare inputs
         if image is not None:
             image = tensor2opencv(image)
 
-        # better be safe than sorry, but may not be enough
-        for item in ["exec", "import", "eval", "lambda", "name", "class", "bases",
-                     "write", "save", "store", "read", "open", "load", "from", "file"]:
-            fitness = fitness.replace(item, "")
-
-        # remove comments and new lines
-        fitness = re.sub('#.+', '', fitness)
-        fitness = re.sub('\n', '', fitness)
+        fitness = prepare_text_for_eval(fitness)
         # endregion
 
         #region available functions
@@ -594,6 +586,7 @@ class FilterContour:
 
         fitness = eval(f"lambda c, i, a: {fitness}", {
             "__builtins__": {},
+            "tuple": tuple, "list": list,
             'm': math, 'cv': cv2, 'np': numpy,
             **available_funcs
         }, {})

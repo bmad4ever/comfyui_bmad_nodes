@@ -155,3 +155,22 @@ def cache_with_ids(single: bool = False):
         return wrapper
 
     return decorator
+
+
+def prepare_text_for_eval(text, complementary_purge_list=None):
+    import re
+
+    # purge the string from domonic entities
+    for item in ["exec", "import", "eval", "lambda", "_name_", "_class_", "_bases_",
+                 "write", "save", "store", "read", "open", "load", "from", "file"]:
+        text = text.replace(item, "")
+
+    if complementary_purge_list is not None:
+        for item in complementary_purge_list:
+            text = text.replace(item, "")
+
+    # remove comments and new lines
+    text = re.sub('#.+', '', text)
+    text = re.sub('\n', '', text)
+
+    return text
