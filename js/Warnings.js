@@ -2,6 +2,7 @@ import { app } from "/scripts/app.js";
 
 var potentially_dangerous_nodes = [
 	"Filter Contour",
+	"AnyToAny"
 ]
 
 var warned = false
