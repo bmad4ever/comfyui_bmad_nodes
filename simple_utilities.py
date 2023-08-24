@@ -415,6 +415,31 @@ class VAEEncodeBatch:
         return ({"samples": latent},)
 
 
+class AnyToAny:
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "v": ("*", ),
+            "function": ("STRING", {"multiline": True, "default": ""}),
+        }}
+
+    FUNCTION = "eval_it"
+    CATEGORY = "Bmad/⚠️⚠️⚠️"
+    RETURN_TYPES = tuple(["*" for x in range(16)])
+
+    def eval_it(self, v, function):
+        function = prepare_text_for_eval(function)
+        expression = eval(f"lambda v: {function}", {
+            "__builtins__": {},
+            "tuple": tuple, "list": list},
+            {})
+        result = expression(v)
+        return result
+
+
 NODE_CLASS_MAPPINGS = {
     "String": StringNode,
     "Add String To Many": AddString2Many,
@@ -432,5 +457,7 @@ NODE_CLASS_MAPPINGS = {
 
     "AdjustRect": AdjustRect,
 
-    "VAEEncodeBatch": VAEEncodeBatch
+    "VAEEncodeBatch": VAEEncodeBatch,
+
+    "AnyToAny": AnyToAny
 }
