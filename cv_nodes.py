@@ -624,6 +624,46 @@ class ContourToMask:
 # endregion contour nodes
 
 
+class SeamlessClone:
+    clone_modes_map = {
+        "NORMAL": cv.NORMAL_CLONE,
+        "MIXED": cv.MIXED_CLONE,
+        "MONO": cv.MONOCHROME_TRANSFER
+    }
+    clone_modes = list(clone_modes_map.keys())
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "src": ("IMAGE",),
+                "dst": ("IMAGE",),
+                "src_mask": ("IMAGE",),
+                "flag": (s.clone_modes, {"default": s.clone_modes[0]}),
+                "xOffset": ("INT", {"default": 0, "min": -999999, "step": 1}),
+                "yOffset": ("INT", {"default": 0, "min": -999999, "step": 1}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", )
+    FUNCTION = "paste"
+    CATEGORY = "Bmad/CV"
+
+    def paste(self, src, dst, src_mask, flag, xOffset, yOffset):
+        src = tensor2opencv(src)
+        dst = tensor2opencv(dst)
+        src_mask = tensor2opencv(src_mask, 1)
+
+        cx = dst.shape[1]//2 + xOffset
+        cy = dst.shape[0]//2 + yOffset
+
+        result = cv.seamlessClone(src, dst, src_mask, (cx, cy), self.clone_modes_map[flag])
+        result = opencv2tensor(result)
+
+        return (result, )
+
+
+
 NODE_CLASS_MAPPINGS = {
     "Framed Mask Grab Cut": FramedMaskGrabCut,
     "Framed Mask Grab Cut 2": FramedMaskGrabCut2,
@@ -635,4 +675,6 @@ NODE_CLASS_MAPPINGS = {
     "BoundingRect (contours)": ContourGetBoundingRect,
     "Filter Contour": FilterContour,
     "Contour To Mask": ContourToMask,
+
+    "SeamlessClone": SeamlessClone,
 }
