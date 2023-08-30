@@ -624,6 +624,8 @@ class ContourToMask:
 # endregion contour nodes
 
 
+# region Computational Photography
+
 class SeamlessClone:
     clone_modes_map = {
         "NORMAL": cv.NORMAL_CLONE,
@@ -647,7 +649,7 @@ class SeamlessClone:
 
     RETURN_TYPES = ("IMAGE", )
     FUNCTION = "paste"
-    CATEGORY = "Bmad/CV"
+    CATEGORY = "Bmad/CV/C.Photography"
 
     def paste(self, src, dst, src_mask, flag, cx, cy):
         src = tensor2opencv(src)
@@ -674,15 +676,50 @@ class SeamlessCloneSimpler:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "paste"
-    CATEGORY = "Bmad/CV"
+    CATEGORY = "Bmad/CV/C.Photography"
+
+    @staticmethod
+    def get_center(cv_mask):
+        br = cv.boundingRect(cv_mask)
+        return br[0] + br[2] // 2, br[1] + br[3] // 2
 
     def paste(self, src, dst, src_mask, flag):
         src_mask_cv = tensor2opencv(src_mask, 1)
-        br = cv.boundingRect(src_mask_cv)
-        cx, cy = (br[0] + br[2] // 2, br[1] + br[3] // 2)
+        cx, cy = SeamlessCloneSimpler.get_center(src_mask_cv)
         sc = SeamlessClone()
         return sc.paste(src, dst, src_mask, flag, cx, cy)
 
+
+class Inpaint:
+    inpaint_method_map = {
+        "TELEA": cv.INPAINT_TELEA,
+        "NS": cv.INPAINT_NS,
+    }
+    inpaint_methods = list(inpaint_method_map.keys())
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "img": ("IMAGE",),
+                "mask": ("IMAGE",),
+                "radius": ("INT", {"default": 3, "min": 0, "step": 1}),
+                "flag": (s.inpaint_methods, {"default": s.inpaint_methods[0]}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "paint"
+    CATEGORY = "Bmad/CV/C.Photography"
+
+    def paint(self, img, mask, radius, flag):
+        img = tensor2opencv(img)
+        mask = tensor2opencv(mask, 1)
+        dst = cv.inpaint(img, mask, radius, self.inpaint_method_map[flag])
+        result = opencv2tensor(dst)
+        return (result, )
+
+# endregion Computational Photography
 
 
 NODE_CLASS_MAPPINGS = {
@@ -699,4 +736,5 @@ NODE_CLASS_MAPPINGS = {
 
     "SeamlessClone": SeamlessClone,
     "SeamlessClone (simple)": SeamlessCloneSimpler,
+    "Inpaint": Inpaint,
 }
