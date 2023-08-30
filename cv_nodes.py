@@ -640,8 +640,8 @@ class SeamlessClone:
                 "dst": ("IMAGE",),
                 "src_mask": ("IMAGE",),
                 "flag": (s.clone_modes, {"default": s.clone_modes[0]}),
-                "xOffset": ("INT", {"default": 0, "min": -999999, "step": 1}),
-                "yOffset": ("INT", {"default": 0, "min": -999999, "step": 1}),
+                "cx": ("INT", {"default": 0, "min": -999999, "step": 1}),
+                "cy": ("INT", {"default": 0, "min": -999999, "step": 1}),
             },
         }
 
@@ -649,18 +649,39 @@ class SeamlessClone:
     FUNCTION = "paste"
     CATEGORY = "Bmad/CV"
 
-    def paste(self, src, dst, src_mask, flag, xOffset, yOffset):
+    def paste(self, src, dst, src_mask, flag, cx, cy):
         src = tensor2opencv(src)
         dst = tensor2opencv(dst)
         src_mask = tensor2opencv(src_mask, 1)
-
-        cx = dst.shape[1]//2 + xOffset
-        cy = dst.shape[0]//2 + yOffset
 
         result = cv.seamlessClone(src, dst, src_mask, (cx, cy), self.clone_modes_map[flag])
         result = opencv2tensor(result)
 
         return (result, )
+
+
+class SeamlessCloneSimpler:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "src": ("IMAGE",),
+                "dst": ("IMAGE",),
+                "src_mask": ("IMAGE",),
+                "flag": (SeamlessClone.clone_modes, {"default": SeamlessClone.clone_modes[0]}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "paste"
+    CATEGORY = "Bmad/CV"
+
+    def paste(self, src, dst, src_mask, flag):
+        src_mask_cv = tensor2opencv(src_mask, 1)
+        br = cv.boundingRect(src_mask_cv)
+        cx, cy = (br[0] + br[2] // 2, br[1] + br[3] // 2)
+        sc = SeamlessClone()
+        return sc.paste(src, dst, src_mask, flag, cx, cy)
 
 
 
@@ -677,4 +698,5 @@ NODE_CLASS_MAPPINGS = {
     "Contour To Mask": ContourToMask,
 
     "SeamlessClone": SeamlessClone,
+    "SeamlessClone (simple)": SeamlessCloneSimpler,
 }
