@@ -748,15 +748,20 @@ class ChameleonMask:    # wtf would I name this node as?
                 "mode": (s.modes, {"default": s.modes[0]}),
                 "output_format": (image_output_formats_options, {
                     "default": image_output_formats_options[0]
-                })
+                }),
+
             },
+            "optional": {
+                "optional_roi_mask": ("IMAGE",)
+            }
         }
 
     RETURN_TYPES = ("IMAGE", "IMAGE",)
     FUNCTION = "create_mask"
     CATEGORY = "Bmad/CV/C.Photography"
 
-    def create_mask(self, src, dst, thresh_blur, close_dist, open_dist, size_dist, mask_blur, contrast_adjust, mode, output_format):
+    def create_mask(self, src, dst, thresh_blur, close_dist, open_dist, size_dist, mask_blur,
+                    contrast_adjust, mode, output_format, optional_roi_mask=None):
         src = tensor2opencv(src)
         dst = tensor2opencv(dst)
 
@@ -772,6 +777,10 @@ class ChameleonMask:    # wtf would I name this node as?
         # binary thresholding
         #_, mask = cv.threshold(diff, threshold, 255, cv.THRESH_BINARY)
         diff = cv.GaussianBlur(diff, (thresh_blur, thresh_blur), 0)
+        # note: not going to make an arg for the threshold. supposes it is an almost perfect binary mask already
+        if optional_roi_mask is not None:
+            optional_roi_mask = tensor2opencv(optional_roi_mask, 1)
+            diff[optional_roi_mask < 127] = 0
         ret3, mask = cv.threshold(diff, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
 
         # morphological closing > closing > dilate/erode
