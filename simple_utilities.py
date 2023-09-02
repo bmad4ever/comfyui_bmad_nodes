@@ -1,8 +1,10 @@
 import math
 
+import numpy as np
 from PIL import ImageColor
 
 import nodes
+import comfy_extras.nodes_mask as nodes_mask
 from .dry import *
 
 
@@ -342,9 +344,6 @@ class AdjustRect:
     }
     round_modes = list(round_mode_map.keys())
 
-    def __init__(self):
-        pass
-
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
@@ -440,6 +439,82 @@ class AnyToAny:
         return result
 
 
+class MaskGridNKSamplersAdvanced(nodes.KSamplerAdvanced):
+    @classmethod
+    def INPUT_TYPES(s):
+        types = super().INPUT_TYPES()
+        types["required"]["mask"] = ("IMAGE",)
+        types["required"]["rows"] = ("INT", {"default": 1, "min": 1, "max": 16})
+        types["required"]["columns"] = ("INT", {"default": 3, "min": 1, "max": 16})
+        return types
+
+    RETURN_TYPES = ("LATENT", )
+    FUNCTION = "gen_batch"
+    CATEGORY = "Bmad/latent"
+
+    def gen_batch(self,  model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, start_at_step, end_at_step, return_with_leftover_noise,
+                  mask, rows, columns, denoise=1.0):
+
+        # setup sizes
+        _, _, latent_height_as_img, latent_width_as_img = latent_image['samples'].size()
+        latent_width_as_img *= 8
+        latent_height_as_img *= 8
+        _, mask_height, mask_width, _ = mask.size()
+
+        # existing nodes required for the operation
+        set_mask_node = nodes.SetLatentNoiseMask()
+        ksampler_node = nodes.KSamplerAdvanced()
+
+        latents = []
+        for r in range(rows):
+            for c in range(columns):
+                # copy source mask to a new empty mask
+                new_mask = torch.zeros((latent_height_as_img, latent_width_as_img))
+                new_mask[mask_height*r:mask_height*(r+1), mask_width*c:mask_width*(c+1)] = mask[0, :, :, 0]
+
+                # prepare latent w/ mask and send to ksampler
+                new_latent = set_mask_node.set_mask(samples=latent_image.copy(), mask=new_mask)[0]
+                new_latent = ksampler_node.sample(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, new_latent, start_at_step, end_at_step, return_with_leftover_noise, denoise)[0]['samples']
+
+                # add new latent
+                latents.append(new_latent)
+
+        return ({"samples":torch.cat([batch for batch in latents], dim=0)}, )
+
+
+class MergeLatentsBatchGridwise:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "batch": ("LATENT", ),
+            "mask": ("IMAGE", ),  # only to fetch the sizes, not really needed.
+            "rows": ("INT", {"default": 1, "min": 1, "max": 16}),
+            "columns": ("INT", {"default": 1, "min": 1, "max": 16})
+        }}
+
+    RETURN_TYPES = ("LATENT", )
+    FUNCTION = "merge"
+    CATEGORY = "Bmad/latent"
+
+    def merge(self, batch, mask, rows, columns):
+        _, mask_height, mask_width, _ = mask.size()
+        mask_height //= 8
+        mask_width //= 8
+        _, cs, hs, ws = batch["samples"].size()
+        print(f'{batch["samples"].size()}')
+        merged = torch.empty(size=(1, cs, hs, ws), dtype=batch["samples"].dtype, device=batch["samples"].device)
+        for r in range(rows):
+            for c in range(columns):
+                x2 = x1 = mask_width*c
+                x2 += mask_width
+                y2 = y1 = mask_height*r
+                y2 += mask_height
+                print(f"{x1}:{x2}, {y1}:{y2}, {c+r*columns}")
+                merged[0, :, y1:y2, x1:x2] = batch["samples"][c+r*columns, :, y1:y2, x1:x2]
+
+        return ({"samples":merged}, )
+
+
 NODE_CLASS_MAPPINGS = {
     "String": StringNode,
     "Add String To Many": AddString2Many,
@@ -459,5 +534,8 @@ NODE_CLASS_MAPPINGS = {
 
     "VAEEncodeBatch": VAEEncodeBatch,
 
-    "AnyToAny": AnyToAny
+    "AnyToAny": AnyToAny,
+
+    "MaskGrid N KSamplers Advanced": MaskGridNKSamplersAdvanced,
+    "Merge Latent Batch Gridwise": MergeLatentsBatchGridwise
 }
