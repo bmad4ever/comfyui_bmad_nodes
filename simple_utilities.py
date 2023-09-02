@@ -347,20 +347,23 @@ class AdjustRect:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "x1": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
-            "y1": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
-            "x2": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
-            "y2": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
+            "a": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
+            "b": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
+            "c": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
+            "d": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
             "xm": ("INT", {"default": 64, "min": 2, "max": 1280, "step": 2}),
             "ym": ("INT", {"default": 64, "min": 2, "max": 1280, "step": 2}),
-            "round_mode": (s.round_modes, {"default": s.round_modes[2]})
+            "round_mode": (s.round_modes, {"default": s.round_modes[2]}),
+            "input_format": (rect_modes, {"default": rect_modes[1]}),
+            "output_format": (rect_modes, {"default": rect_modes[1]}),
         }}
 
     RETURN_TYPES = tuple(["INT" for x in range(4)])
     FUNCTION = "adjust"
     CATEGORY = "Bmad"
 
-    def adjust(self, x1, y1, x2, y2, xm, ym, round_mode):
+    def adjust(self, a, b, c, d, xm, ym, round_mode, input_format, output_format):
+        x1, y1, x2, y2 = rect_modes_map[input_format]["toBounds"](a, b, c, d)
         center_x = (x1 + x2) // 2 + 1
         center_y = (y1 + y2) // 2 + 1
         # reasoning:
@@ -380,6 +383,9 @@ class AdjustRect:
         y2 = y1 = center_y
         y2 += half_new_len_y
         y1 -= half_new_len_y
+
+        # convert to desired output format
+        x1, y1, x2, y2 = rect_modes_map[output_format]["fromBounds"](x1, y1, x2, y2)
 
         return (x1, y1, x2, y2, )
 
