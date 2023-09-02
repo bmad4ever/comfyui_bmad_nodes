@@ -5,7 +5,6 @@ import torch
 import numpy as np
 from PIL import Image
 
-
 color255_INPUT = ("INT", {
     "default": 0,
     "min": 0,
@@ -13,12 +12,13 @@ color255_INPUT = ("INT", {
     "step": 1
 })
 
-grid_len_INPUT = ("INT",  {
+grid_len_INPUT = ("INT", {
     "default": 3,
     "min": 1,
     "max": 8,
     "step": 1
 })
+
 
 class ColorClip:
     OPERATION = [
@@ -68,6 +68,7 @@ image_output_formats_options_map = {
     "GRAY": 1
 }
 image_output_formats_options = list(image_output_formats_options_map.keys())
+
 
 def tensor2opencv(image_tensor, out_format_number_of_channels=3):
     """
@@ -121,7 +122,7 @@ def maybe_convert_img(img, src_format_number_of_channels, dst_format_number_of_c
             case 3:
                 return cv.cvtColor(img, cv.COLOR_RGB2RGBA)
     print("Case not considered for given number of channels: "
-        f"source={dst_format_number_of_channels} and target={src_format_number_of_channels}.")
+          f"source={dst_format_number_of_channels} and target={src_format_number_of_channels}.")
     return None
 
 
@@ -174,3 +175,26 @@ def prepare_text_for_eval(text, complementary_purge_list=None):
     text = re.sub('\n', '', text)
 
     return text
+
+
+rect_modes_map = {
+        'top-left XY + WH': {
+            "toBounds": lambda x1, y1, w, h: (x1, y1, x1 + w, y1 + w),
+            "fromBounds": lambda x1, y1, x2, y2: (x1, y1, x2 - x1, y2 - y1)
+        },
+        'top-left XY + bottom-right XY': {
+            # do nothing "
+            "toBounds": lambda x1, y1, x2, y2: (x1, y1, x2, y2),
+            "fromBounds": lambda x1, y1, x2, y2: (x1, y1, x2, y2)
+        },
+        'center XY (floored) + WH': {
+            "toBounds": lambda x, y, w, h: (x - w // 2 + w & 1, y - h // 2 + h & 1, x + w // 2, y + h // 2),
+            "fromBounds": lambda x1, y1, x2, y2: ((x1 + x2) // 2, (y1 + y2) // 2, x2 - x1, y2 - y1)
+        },
+        'center XY + half WH (all floored)': {
+            # can't guarantee original bounds if converted previously, will only have even numbers on width/height
+            "toBounds": lambda x, y, half_w, half_h: (x - half_w + 1, y - half_h + 1, x + half_w + 1, y + half_h + 1),
+            "fromBounds": lambda x1, y1, x2, y2: ((x1 + x2) // 2, (y1 + y2) // 2, (x2 - x1) // 2, (y2 - y1) // 2)
+        }
+    }
+rect_modes = list(rect_modes_map.keys())

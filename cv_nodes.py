@@ -406,33 +406,12 @@ class GetContourFromList:
 
 
 class ContourGetBoundingRect:
-
-    def vanilla(self,x,y,w,h):
-        return (x,y,w,h,)
-
-    def corners(self,x,y,w,h):
-        return (x, y, x + w, y + h,)
-
-    def center_and_size(self, x, y, w, h):
-        return (x + w // 2, y + h // 2, w, h,)
-
-    def center_and_half_size(self, x, y, w, h):
-        return (x + w // 2, y + h // 2, w // 2, h // 2,)
-
-    rect_modes_map = {
-        'top-left XY + WH': vanilla,
-        'top-left XY + bottom-right XY': corners,
-        'center XY (floored) + WH': center_and_size,
-        'center XY + half WH (all floored)': center_and_half_size,
-    }
-    rect_modes = list(rect_modes_map.keys())
-
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                 "contour": ("CV_CONTOUR",),
-                "return_mode": (s.rect_modes, {"default": s.rect_modes[1]})
+                "return_mode": (rect_modes, {"default": rect_modes[1]})
             },
         }
 
@@ -445,7 +424,11 @@ class ContourGetBoundingRect:
             print("Contour = None !")
             return (0,0,0,0, )
 
-        return self.rect_modes_map[return_mode](self, *cv.boundingRect(contour))
+        # convert opencv boundingRect format to bounds
+        bounds = rect_modes_map[rect_modes[0]]["toBounds"](*cv.boundingRect(contour))
+
+        # convert from bounds to desired output format on return
+        return rect_modes_map[return_mode]["fromBounds"](*bounds)
 
 
 class FilterContour:
@@ -777,11 +760,10 @@ class ChameleonMask:    # wtf would I name this node as?
         # binary thresholding
         #_, mask = cv.threshold(diff, threshold, 255, cv.THRESH_BINARY)
         diff = cv.GaussianBlur(diff, (thresh_blur, thresh_blur), 0)
-        # note: not going to make an arg for the threshold. supposes it is an almost perfect binary mask already
+        ret3, mask = cv.threshold(diff, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
         if optional_roi_mask is not None:
             optional_roi_mask = tensor2opencv(optional_roi_mask, 1)
-            diff[optional_roi_mask < 127] = 0
-        ret3, mask = cv.threshold(diff, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
+            mask[optional_roi_mask < 127] = 0
 
         # morphological closing > closing > dilate/erode
         if close_dist > 0:
