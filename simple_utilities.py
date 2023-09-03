@@ -372,6 +372,7 @@ class AdjustRect:
         # __ x1 __ cx __ x2 ( target len of 4   )
         # most crop implementations include x1 but exclude x2;
         # thus is closer to original input
+        # note that xm and ym are always even
 
         half_new_len_x = self.round_mode_map[round_mode]( (x2-x1)/xm )*xm//2
         half_new_len_y = self.round_mode_map[round_mode]( (y2-y1)/ym )*ym//2
@@ -446,12 +447,19 @@ class AnyToAny:
 
 
 class MaskGridNKSamplersAdvanced(nodes.KSamplerAdvanced):
+    fork_before_sampling = {
+        "Sample then Fork": False,
+        "Fork then Sample": True
+    }
+    fork_options = list(fork_before_sampling.keys())
+
     @classmethod
     def INPUT_TYPES(s):
         types = super().INPUT_TYPES()
         types["required"]["mask"] = ("IMAGE",)
         types["required"]["rows"] = ("INT", {"default": 1, "min": 1, "max": 16})
         types["required"]["columns"] = ("INT", {"default": 3, "min": 1, "max": 16})
+        types["required"]["mode"] = (s.fork_options, {"default": s.fork_options[0]})
         return types
 
     RETURN_TYPES = ("LATENT", )
@@ -459,7 +467,7 @@ class MaskGridNKSamplersAdvanced(nodes.KSamplerAdvanced):
     CATEGORY = "Bmad/latent"
 
     def gen_batch(self,  model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, start_at_step, end_at_step, return_with_leftover_noise,
-                  mask, rows, columns, denoise=1.0):
+                  mask, rows, columns, mode, denoise=1.0):
 
         # setup sizes
         _, _, latent_height_as_img, latent_width_as_img = latent_image['samples'].size()
@@ -469,21 +477,50 @@ class MaskGridNKSamplersAdvanced(nodes.KSamplerAdvanced):
 
         # existing nodes required for the operation
         set_mask_node = nodes.SetLatentNoiseMask()
-        ksampler_node = nodes.KSamplerAdvanced()
 
         latents = []
-        for r in range(rows):
-            for c in range(columns):
-                # copy source mask to a new empty mask
-                new_mask = torch.zeros((latent_height_as_img, latent_width_as_img))
-                new_mask[mask_height*r:mask_height*(r+1), mask_width*c:mask_width*(c+1)] = mask[0, :, :, 0]
 
-                # prepare latent w/ mask and send to ksampler
-                new_latent = set_mask_node.set_mask(samples=latent_image.copy(), mask=new_mask)[0]
-                new_latent = ksampler_node.sample(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, new_latent, start_at_step, end_at_step, return_with_leftover_noise, denoise)[0]['samples']
+        if not self.fork_before_sampling[mode]:
+            # FORK AFTER SAMPLING
 
-                # add new latent
-                latents.append(new_latent)
+            # prepare mask
+            mask = RepeatIntoGridImage().repeat_into_grid(mask, columns, rows)[0]
+            new_mask = torch.zeros((latent_height_as_img, latent_width_as_img))
+            new_mask[:, :] = mask[0, :, :, 0]
+
+            # prepare latent w/ mask and send to ksampler
+            sampled_latent = set_mask_node.set_mask(samples=latent_image, mask=new_mask)[0]
+            sampled_latent = super().sample(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative,
+                                                  sampled_latent, start_at_step, end_at_step, return_with_leftover_noise, denoise)[0]['samples']
+
+            # adjust mask sizes for latent space
+            mask_height //= 8
+            mask_width //= 8
+            
+            # fork and copy regions from original latent
+            for r in range(rows):
+                for c in range(columns):
+                    x2 = x1 = mask_width * c
+                    x2 += mask_width
+                    y2 = y1 = mask_height * r
+                    y2 += mask_height
+                    new_latent = latent_image['samples'].clone()
+                    new_latent[0, :, y1:y2, x1:x2] = sampled_latent[0, :, y1:y2, x1:x2]
+                    latents.append(new_latent)  # add new latent
+        else:
+            # FORK BEFORE SAMPLING
+            for r in range(rows):
+                for c in range(columns):
+                    # copy source mask to a new empty mask
+                    new_mask = torch.zeros((latent_height_as_img, latent_width_as_img))
+                    new_mask[mask_height*r:mask_height*(r+1), mask_width*c:mask_width*(c+1)] = mask[0, :, :, 0]
+
+                    # prepare latent w/ mask and send to ksampler
+                    new_latent = set_mask_node.set_mask(samples=latent_image.copy(), mask=new_mask)[0]
+                    new_latent = super().sample(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative,
+                                                      new_latent, start_at_step, end_at_step, return_with_leftover_noise, denoise)[0]['samples']
+
+                    latents.append(new_latent) # add new latent
 
         return ({"samples":torch.cat([batch for batch in latents], dim=0)}, )
 
@@ -515,7 +552,6 @@ class MergeLatentsBatchGridwise:
                 x2 += mask_width
                 y2 = y1 = mask_height*r
                 y2 += mask_height
-                print(f"{x1}:{x2}, {y1}:{y2}, {c+r*columns}")
                 merged[0, :, y1:y2, x1:x2] = batch["samples"][c+r*columns, :, y1:y2, x1:x2]
 
         return ({"samples":merged}, )
