@@ -583,7 +583,7 @@ class CondList:
         return (cond_list,)
 
 
-class CLIPEncodeMultiple(CondList):
+class CLIPEncodeMultiple(nodes.CLIPTextEncode):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
@@ -597,12 +597,11 @@ class CLIPEncodeMultiple(CondList):
     OUTPUT_IS_LIST = (True,)
 
     def gen2(self, clip, inputs_len, **kwargs):
-        text_encode_node = nodes.CLIPTextEncode()
-        encoded_grid = {}
+        conds = []
         for i in range(inputs_len):
             arg_name = get_arg_name_from_multiple_inputs("string", i)
-            encoded_grid[arg_name] = text_encode_node.encode(clip, kwargs[arg_name])[0]
-        return super().gen(inputs_len, **encoded_grid)
+            conds.append(super().encode(clip, kwargs[arg_name])[0])
+        return (conds,)
 
 
 class ControlNetHadamard(nodes.ControlNetApply):
