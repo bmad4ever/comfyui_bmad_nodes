@@ -198,3 +198,16 @@ rect_modes_map = {
         }
     }
 rect_modes = list(rect_modes_map.keys())
+
+
+
+def get_arg_name_from_multiple_inputs(type, index):
+    """
+    Args:
+        type: must be lower case
+        index: starting at 0, as you would normally use in a list
+    Returns:
+        The name of the arg setup by ArbitraryInputsFixedOutputs.js
+    """
+    return f"{type}_{index+1}"
+

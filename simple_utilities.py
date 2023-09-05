@@ -557,6 +557,113 @@ class MergeLatentsBatchGridwise:
         return ({"samples":merged}, )
 
 
+#===================================================
+
+# region cond lists
+
+class CondList:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "inputs_len": ("INT", {"default": 9, "min": 0, "max": 32}),
+            # accept only 1, there may be workflows that change the number of conds to gen depending on inputs
+            # would 0 also be acceptable? e.g. to concat or combine, maybe the list is empty cause is not applicable?
+            # hmmmmmm... will place a zero and once I have something to test I can decide
+        }}
+    RETURN_TYPES = ("CONDITIONING", )
+    FUNCTION = "gen"
+    CATEGORY = "Bmad/conditioning"
+    OUTPUT_IS_LIST = (True,)
+
+    def gen(self, inputs_len, **kwargs):
+        cond_list=[]
+        for i in range(inputs_len):
+            arg_name = get_arg_name_from_multiple_inputs("conditioning", i)
+            cond_list.append(kwargs[arg_name])
+        return (cond_list,)
+
+
+class CLIPEncodeMultiple(CondList):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "clip": ("CLIP", ),
+            "inputs_len": ("INT", {"default": 9, "min": 0, "max": 32}),
+        }}
+
+    RETURN_TYPES = ("CONDITIONING",)
+    FUNCTION = "gen2"
+    CATEGORY = "Bmad/conditioning"
+    OUTPUT_IS_LIST = (True,)
+
+    def gen2(self, clip, inputs_len, **kwargs):
+        text_encode_node = nodes.CLIPTextEncode()
+        encoded_grid = {}
+        for i in range(inputs_len):
+            arg_name = get_arg_name_from_multiple_inputs("string", i)
+            encoded_grid[arg_name] = text_encode_node.encode(clip, kwargs[arg_name])[0]
+        return super().gen(inputs_len, **encoded_grid)
+
+
+class ControlNetHadamard(nodes.ControlNetApply):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"conds": ("CONDITIONING",),
+                             "control_net": ("CONTROL_NET",),
+                             "image": ("IMAGE", ),
+                             "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                             }}
+
+    RETURN_TYPES = ("CONDITIONING",)
+    FUNCTION = "apply"
+    CATEGORY = "Bmad/conditioning"
+    INPUT_IS_LIST = True
+    OUTPUT_IS_LIST = (True,)
+
+    def apply(self, conds, control_net, images, strength):
+        control_net = control_net[0]
+        strength = strength[0]
+
+        if len(images) != len(conds):
+            raise "lists sizes do not match"  # maybe relax check and allow for fewer conds than images?
+
+        print(len(images))
+        print(len(images[0]))
+        print(len(conds))
+        new_conds = []
+        for i in range(len(images)):
+            new_conds.append(super().apply_controlnet(conds[i], control_net, images[i], strength)[0])
+        return (new_conds,)
+
+
+class ControlNetHadamardManual(ControlNetHadamard):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"conds": ("CONDITIONING", ),
+                             "control_net": ("CONTROL_NET", ),
+                             "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                             "inputs_len": ("INT", {"default": 9, "min": 0, "max": 32})
+                             }}
+
+    RETURN_TYPES = ("CONDITIONING",)
+    FUNCTION = "apply"
+    CATEGORY = "Bmad/conditioning"
+    INPUT_IS_LIST = True
+    OUTPUT_IS_LIST = (True,)
+
+    def apply(self, conds, control_net, strength, inputs_len, **kwargs):
+        inputs_len = inputs_len[0]
+        images = []
+        for i in range(inputs_len):
+            arg_name = get_arg_name_from_multiple_inputs("image", i)
+            images.append(kwargs[arg_name][0])
+        return super().apply(conds, control_net, images, strength)
+
+
+# endregion cond lists workflow
+
+
+
 NODE_CLASS_MAPPINGS = {
     "String": StringNode,
     "Add String To Many": AddString2Many,
@@ -579,5 +686,10 @@ NODE_CLASS_MAPPINGS = {
     "AnyToAny": AnyToAny,
 
     "MaskGrid N KSamplers Advanced": MaskGridNKSamplersAdvanced,
-    "Merge Latent Batch Gridwise": MergeLatentsBatchGridwise
+    "Merge Latent Batch Gridwise": MergeLatentsBatchGridwise,
+
+    "CondList": CondList,
+    "CLIPEncodeMultiple": CLIPEncodeMultiple,
+    "ControlNetHadamard": ControlNetHadamard,
+    "ControlNetHadamard (manual)": ControlNetHadamardManual
 }

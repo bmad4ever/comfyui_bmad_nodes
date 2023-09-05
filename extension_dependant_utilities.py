@@ -1,5 +1,5 @@
 from .dry import *
-from .simple_utilities import ConditioningGridCond
+from .simple_utilities import ConditioningGridCond, CondList
 from custom_nodes.ComfyUI_ADV_CLIP_emb.nodes import AdvancedCLIPTextEncode
 
 
@@ -25,11 +25,6 @@ class ConditioningGridStr_ADVEncode:
 
             "token_normalization": (["none", "mean", "length", "length+mean"],),
             "weight_interpretation": (["comfy", "A1111", "compel", "comfy++", "down_weight"],)
-            #"parser": (["comfy", "comfy++", "A1111", "full", "compel", "fixed attention"], {"default": "comfy"}),
-            #"mean_normalization": ([False, True], {"default": True}),
-            #"multi_conditioning": ([False, True], {"default": True}),
-            #"use_old_emphasis_implementation": ([False, True], {"default": False}),
-            #"use_CFGDenoiser": ([False, True], {"default": False}),
         }}
 
     RETURN_TYPES = ("CONDITIONING",)
@@ -53,6 +48,30 @@ class ConditioningGridStr_ADVEncode:
         return cond_grid_node.set_conditioning(encoded_base, columns, rows, width, height, strength, **encoded_grid)
 
 
+class CLIPEncodeMultipleAdvanced(CondList):
+    @classmethod
+    def INPUT_TYPES(s):
+        types = super().INPUT_TYPES()
+        types["required"]["token_normalization"] = (["none", "mean", "length", "length+mean"],)
+        types["required"]["weight_interpretation"] = (["comfy", "A1111", "compel", "comfy++", "down_weight"],)
+
+    RETURN_TYPES = ("CONDITIONING",)
+    FUNCTION = "gen2"
+    CATEGORY = "Bmad/conditioning"
+    OUTPUT_IS_LIST = (True,)
+
+    def gen2(self, clip, inputs_len,
+             token_normalization, weight_interpretation,
+             **kwargs):
+        text_encode_node = AdvancedCLIPTextEncode()
+        encoded_grid = {}
+        for i in range(inputs_len):
+            arg_name = f"string_{i}"
+            encoded_grid[arg_name] = text_encode_node.encode(clip, kwargs[arg_name], token_normalization, weight_interpretation,'disable')[0]
+        return super().gen(inputs_len, **encoded_grid)
+
+
 NODE_CLASS_MAPPINGS = {
-    "Conditioning Grid (string) Advanced": ConditioningGridStr_ADVEncode
+    "Conditioning Grid (string) Advanced": ConditioningGridStr_ADVEncode,
+    "CLIPEncodeMultipleAdvanced": CLIPEncodeMultipleAdvanced
 }
