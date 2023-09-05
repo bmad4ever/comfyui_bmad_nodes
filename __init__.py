@@ -50,7 +50,7 @@ try:
     loaded.append(f"extension dependent nodes ({len([*extended])})")
 except Exception as e:
     extended = {}
-    not_loaded.append("api nodes")
+    not_loaded.append("extension dependent nodes")
     exceptions.append(e)
 
 
