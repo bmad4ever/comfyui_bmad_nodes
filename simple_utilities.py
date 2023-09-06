@@ -1,6 +1,7 @@
 import math
 
 import numpy as np
+import torch
 from PIL import ImageColor
 
 import nodes
@@ -496,7 +497,7 @@ class MaskGridNKSamplersAdvanced(nodes.KSamplerAdvanced):
             # adjust mask sizes for latent space
             mask_height //= 8
             mask_width //= 8
-            
+
             # fork and copy regions from original latent
             for r in range(rows):
                 for c in range(columns):
@@ -662,6 +663,34 @@ class ControlNetHadamardManual(ControlNetHadamard):
 # endregion cond lists workflow
 
 
+class FlatLatentsIntoSingleGrid:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"latents": ("LATENT",),}}
+
+    RETURN_TYPES = ("LATENT",)
+    FUNCTION = "flat_into_grid"
+    CATEGORY = "Bmad/latent"
+
+    def flat_into_grid(self, latents):
+        n, lc, lh, lw = latents['samples'].size()
+        length_in_tiles = math.ceil(math.sqrt(n))
+        new_latent = torch.zeros((1, lc, lh*math.ceil(n/length_in_tiles), lw*length_in_tiles),
+                                 dtype=latents["samples"].dtype, device=latents["samples"].device)
+        r = c = 0  # row and column indexes
+        for i in range(n):
+            x1 = x2 = lw*c
+            x2 += lw
+            y1 = y2 = lh*r
+            y2 += lh
+            new_latent[0, :, y1:y2, x1:x2] = latents["samples"][i, :, :, :]
+            c += 1
+            if c >= length_in_tiles:
+                c = 0
+                r += 1
+
+        return ({"samples":new_latent},)
+
 
 NODE_CLASS_MAPPINGS = {
     "String": StringNode,
@@ -690,5 +719,7 @@ NODE_CLASS_MAPPINGS = {
     "CondList": CondList,
     "CLIPEncodeMultiple": CLIPEncodeMultiple,
     "ControlNetHadamard": ControlNetHadamard,
-    "ControlNetHadamard (manual)": ControlNetHadamardManual
+    "ControlNetHadamard (manual)": ControlNetHadamardManual,
+
+    "FlatLatentsIntoSingleGrid": FlatLatentsIntoSingleGrid
 }
