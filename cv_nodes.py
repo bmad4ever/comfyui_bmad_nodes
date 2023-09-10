@@ -61,8 +61,8 @@ class FramedMaskGrabCut:
                     "step": 1
                 }),
                 "output_format": (image_output_formats_options, {
-                                  "default": image_output_formats_options[0]
-                                  })
+                    "default": image_output_formats_options[0]
+                })
             },
         }
 
@@ -108,7 +108,7 @@ class FramedMaskGrabCut:
                                               mode=cv.GC_INIT_WITH_MASK)
 
         # generate mask with "pixels" classified as background/foreground
-        output_mask = np.where((mask == cv.GC_BGD) | (mask == cv.GC_PR_BGD),  0, 1)
+        output_mask = np.where((mask == cv.GC_BGD) | (mask == cv.GC_PR_BGD), 0, 1)
 
         output_mask = (output_mask * 255).astype("uint8")
 
@@ -278,7 +278,7 @@ class FramedMaskGrabCut2:
                                               mode=cv.GC_INIT_WITH_MASK)
 
         # generate mask with "pixels" classified as background/foreground
-        output_mask = np.where((mask == cv.GC_BGD) | (mask == cv.GC_PR_BGD),  0, 1)
+        output_mask = np.where((mask == cv.GC_BGD) | (mask == cv.GC_PR_BGD), 0, 1)
         output_mask = (output_mask * 255).astype("uint8")
 
         output_mask = maybe_convert_img(output_mask, 1, image_output_formats_options_map[output_format])
@@ -326,10 +326,10 @@ class Contours:
             },
         }
 
-    RETURN_TYPES = ("CV_CONTOURS", "CV_CONTOURS_HIERARCHY" )
+    RETURN_TYPES = ("CV_CONTOUR", "CV_CONTOURS_HIERARCHY")
     FUNCTION = "find_contours"
-
     CATEGORY = "Bmad/CV/Contour"
+    OUTPUT_IS_LIST = (True, False)
 
     def find_contours(self, image, retrieval_mode, approximation_mode):
         image = tensor2opencv(image)
@@ -350,29 +350,35 @@ class DrawContours:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "contours": ("CV_CONTOURS",),
+                "contours": ("CV_CONTOUR",),
                 "index_to_draw": ("INT", {
                     "default": -1,
                     "min": -1,
                     "max": 1000,
                     "step": 1
                 }),
-                "color": ("COLOR", ),
+                "color": ("COLOR",),
                 "thickness": ("INT", {
                     "default": 5,
-                    "min": 1,
+                    "min": -1,
                     "max": 32,
                     "step": 1
                 }),
             }
         }
 
-    RETURN_TYPES = ("IMAGE", )
+    RETURN_TYPES = ("IMAGE",)
     FUNCTION = "draw"
 
     CATEGORY = "Bmad/CV/Contour"
+    INPUT_IS_LIST = True
 
     def draw(self, image, contours, index_to_draw, color, thickness):
+        image=image[0]
+        index_to_draw=index_to_draw[0]
+        color=color[0]
+        thickness=thickness[0]
+
         background = tensor2opencv(image)
 
         um_image = cv.UMat(background)
@@ -381,7 +387,7 @@ class DrawContours:
 
         image = opencv2tensor(contour_image)
 
-        return (image, )
+        return (image,)
 
 
 class GetContourFromList:
@@ -389,19 +395,20 @@ class GetContourFromList:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "contours": ("CV_CONTOURS",),
-                "index": ("INT", {"default": 0, "min": 0, "step":1})
+                "contours": ("CV_CONTOUR",),
+                "index": ("INT", {"default": 0, "min": 0, "step": 1})
             }
         }
 
-    RETURN_TYPES = ("CV_CONTOUR", )
+    RETURN_TYPES = ("CV_CONTOUR",)
     FUNCTION = "get_contour"
-
     CATEGORY = "Bmad/CV/Contour"
+    INPUT_IS_LIST = True
 
     def get_contour(self, contours, index):
+        index = index[0]
         if index >= len(contours):
-            return (None, )
+            return (None,)
         return (contours[index],)
 
 
@@ -422,7 +429,7 @@ class ContourGetBoundingRect:
     def compute(self, contour, return_mode):
         if contour is None:
             print("Contour = None !")
-            return (0,0,0,0, )
+            return (0, 0, 0, 0,)
 
         # convert opencv boundingRect format to bounds
         bounds = rect_modes_map[rect_modes[0]]["toBounds"](*cv.boundingRect(contour))
@@ -432,10 +439,15 @@ class ContourGetBoundingRect:
 
 
 class FilterContour:
+    def MODE(self, cnts, fit):
+        sorted_list = sorted(cnts, key=fit)
+        return [sorted_list[len(sorted_list) // 2]]
+
     return_modes_map = {
-        "MAX": lambda l: -1,
-        "MIN": lambda l: 0,
-        "MODE": lambda l: len(l)//2
+        "MAX": lambda cnts, fit: [sorted(cnts, key=fit)[-1]],
+        "MIN": lambda cnts, fit: [sorted(cnts, key=fit)[0]],
+        "MODE": MODE,
+        "FILTER": lambda cnts, fit: filter(fit, cnts),
     }
     return_modes = list(return_modes_map.keys())
 
@@ -443,34 +455,43 @@ class FilterContour:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "contours": ("CV_CONTOURS",),
+                "contours": ("CV_CONTOUR",),
                 "fitness": ("STRING", {"multiline": True, "default":
                     "# Contour Fitness Function\n"}),
                 "select": (s.return_modes, {"default": s.return_modes[0]})
             },
             "optional": {
-                "image": ("IMAGE", ),
-                "aux_contour": ("CV_CONTOUR", )
+                "image": ("IMAGE",),
+                "aux_contour": ("CV_CONTOUR",)
             }
         }
 
-    RETURN_TYPES = ("CV_CONTOUR", )
+    RETURN_TYPES = ("CV_CONTOUR",)
     FUNCTION = "filter"
     CATEGORY = "Bmad/CV/Contour"
+    INPUT_IS_LIST = True
+    OUTPUT_IS_LIST = (True,)
 
     def filter(self, contours, fitness, select, image=None, aux_contour=None):
         import math
         import cv2
         import numpy
 
+        fitness=fitness[0]
+        select=select[0]
+
         # region prepare inputs
         if image is not None:
+            image=image[0]
             image = tensor2opencv(image)
+        if aux_contour is not None:
+            aux_contour=aux_contour[0]
 
         fitness = prepare_text_for_eval(fitness)
+
         # endregion
 
-        #region available functions
+        # region available functions
         # cv methods, but cache them
         @cache_with_ids(single=False)
         def boundingRect(cnt):
@@ -541,7 +562,6 @@ class FilterContour:
 
             mask = numpy.zeros((height, width, 1), numpy.uint8)
             cv.drawContours(mask, [cnt], 0, 255, -1)
-            cv.imwrite("test_img.png", mask)
             return mask
 
         @cache_with_ids(single=True)
@@ -560,6 +580,12 @@ class FilterContour:
             t = tuple(cnt[cnt[:, :, 1].argmin()][0])
             b = tuple(cnt[cnt[:, :, 1].argmax()][0])
             return {"top": t, "right": r, "bottom": b, "left": l}
+
+        def intercepts_mask(cnt, img):  # where img should be a binary mask
+            gray = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
+            intersection = cv2.bitwise_and(gray, cv2.drawContours(np.zeros_like(gray), [cnt], 0, 255, thickness=cv2.FILLED))
+            return cv2.countNonZero(intersection) > 0
+
         # endregion
 
         available_funcs = {}
@@ -574,8 +600,9 @@ class FilterContour:
             **available_funcs
         }, {})
 
-        sorted_contours = sorted(contours, key=lambda c: fitness(c, image, aux_contour))
-        return (sorted_contours[ self.return_modes_map[select](sorted_contours) ], )
+        return (self.return_modes_map[select]
+                (contours, lambda c: fitness(c, image, aux_contour))
+                ,)
 
 
 class ContourToMask:
@@ -591,7 +618,7 @@ class ContourToMask:
             }
         }
 
-    RETURN_TYPES = ("IMAGE", )
+    RETURN_TYPES = ("IMAGE",)
     FUNCTION = "draw"
     CATEGORY = "Bmad/CV/Contour"
 
@@ -601,7 +628,7 @@ class ContourToMask:
         cv.drawContours(image, [contour], 0, (255), -1)
         image = maybe_convert_img(image, 1, image_output_formats_options_map[output_format])
         image = opencv2tensor(image)
-        return (image, )
+        return (image,)
 
 
 # endregion contour nodes
@@ -630,7 +657,7 @@ class SeamlessClone:
             },
         }
 
-    RETURN_TYPES = ("IMAGE", )
+    RETURN_TYPES = ("IMAGE",)
     FUNCTION = "paste"
     CATEGORY = "Bmad/CV/C.Photography"
 
@@ -642,7 +669,7 @@ class SeamlessClone:
         result = cv.seamlessClone(src, dst, src_mask, (cx, cy), self.clone_modes_map[flag])
         result = opencv2tensor(result)
 
-        return (result, )
+        return (result,)
 
 
 class SeamlessCloneSimpler:
@@ -700,10 +727,10 @@ class Inpaint:
         mask = tensor2opencv(mask, 1)
         dst = cv.inpaint(img, mask, radius, self.inpaint_method_map[flag])
         result = opencv2tensor(dst)
-        return (result, )
+        return (result,)
 
 
-class ChameleonMask:    # wtf would I name this node as?
+class ChameleonMask:  # wtf would I name this node as?
     mode_func_map = {
         "GRAY": lambda i: cv.cvtColor(i, cv.COLOR_BGR2GRAY),
         "VALUE": lambda i: cv.cvtColor(i, cv.COLOR_RGB2HSV)[:, :, 2],
@@ -758,7 +785,7 @@ class ChameleonMask:    # wtf would I name this node as?
         diff = cv.absdiff(src, dst)
 
         # binary thresholding
-        #_, mask = cv.threshold(diff, threshold, 255, cv.THRESH_BINARY)
+        # _, mask = cv.threshold(diff, threshold, 255, cv.THRESH_BINARY)
         diff = cv.GaussianBlur(diff, (thresh_blur, thresh_blur), 0)
         ret3, mask = cv.threshold(diff, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
         if optional_roi_mask is not None:
@@ -786,7 +813,7 @@ class ChameleonMask:    # wtf would I name this node as?
         # gaussian blur + contrast adjust
         if mask_blur > 0:
             mask = cv.GaussianBlur(mask, (mask_blur, mask_blur), 0)
-        mask = cv.convertScaleAbs(mask, alpha=1 + contrast_adjust, beta=0)#/ 100, beta=0)
+        mask = cv.convertScaleAbs(mask, alpha=1 + contrast_adjust, beta=0)  # / 100, beta=0)
 
         # convert to target format and output as tensor
         # note: diff is only meant to be used for debug purposes
@@ -799,6 +826,158 @@ class ChameleonMask:    # wtf would I name this node as?
 
 # endregion Computational Photography
 
+
+# region thresholding and eq
+
+thresh_types_map = {
+    'BINARY': cv.THRESH_BINARY,
+    'BINARY_INV': cv.THRESH_BINARY_INV,
+    'TRUNC': cv.THRESH_TRUNC,
+    'TOZERO': cv.THRESH_TOZERO,
+    'TOZERO_INV': cv.THRESH_TOZERO_INV,
+}
+thresh_types = list(thresh_types_map.keys())
+
+border_types_map = {
+    "BORDER_CONSTANT": cv.BORDER_CONSTANT,
+    "BORDER_REPLICATE": cv.BORDER_REPLICATE,
+    "BORDER_REFLECT": cv.BORDER_REFLECT,
+    "BORDER_WRAP": cv.BORDER_WRAP,
+    "BORDER_REFLECT_101": cv.BORDER_REFLECT_101,
+    "BORDER_TRANSPARENT": cv.BORDER_TRANSPARENT,
+    "BORDER_ISOLATED": cv.BORDER_ISOLATED
+}
+border_types = list(border_types_map.keys())
+
+
+class OtsuThreshold:
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                # "channel": (s.channels, {"default": "greyscale"}),
+                "threshold_type": (thresh_types, {"default": thresh_types[0]}),
+                "gaussian_blur_x": ("INT", {
+                    "default": 4,
+                    "min": 0,
+                    "max": 200,
+                    "step": 2
+                }),
+                "gaussian_blur_y": ("INT", {
+                    "default": 4,
+                    "min": 0,
+                    "max": 200,
+                    "step": 2
+                }),
+                "gaussian_border_type": (border_types, {"default": "BORDER_REPLICATE"}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "otsu_thresthold"
+
+    CATEGORY = "Bmad/CV/Thresholding"
+
+    def otsu_thresthold(self, image, threshold_type, gaussian_blur_x, gaussian_blur_y, gaussian_border_type):
+        image = tensor2opencv(image, 1)
+        if gaussian_blur_x > 0 and gaussian_blur_y > 0:
+            image = cv.GaussianBlur(image, (gaussian_blur_x + 1, gaussian_blur_y + 1),
+                                    border_types_map[gaussian_border_type])
+        _, image = cv.threshold(image, 0, 255, thresh_types_map[threshold_type] + cv.THRESH_OTSU)
+        image = cv.cvtColor(image, cv.COLOR_GRAY2RGB)
+        image = opencv2tensor(image)
+        return (image,)
+
+
+class AdaptiveThresholding:
+    adaptive_modes_map = {
+        "ADAPTIVE_THRESH_MEAN_C": cv.ADAPTIVE_THRESH_MEAN_C,
+        "ADAPTIVE_THRESH_GAUSSIAN_C": cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+    }
+    adaptive_modes = list(adaptive_modes_map.keys())
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "src": ("IMAGE",),
+                "max_value": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1}),
+                # maybe should just allow for 255? may just confuse some people that don't read documentation
+                "adaptive_method": (s.adaptive_modes, {"default": s.adaptive_modes[1]}),
+                "threshold_type": (thresh_types, {"default": thresh_types[0]}),
+                "block_size": ("INT", {"default": 4, "min": 2, "step": 2}),
+                "c": ("INT", {"default": 2, "min": -999, "step": 1}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "thresh"
+    CATEGORY = "Bmad/CV/Thresholding"
+
+    def thresh(self, src, max_value, adaptive_method, threshold_type, block_size, c):
+        # maybe allow to use from a specific channel 1st? nah, just create a node to fetch the channel
+        # might be useful for other nodes
+        src = tensor2opencv(src, 1)
+        src = cv.adaptiveThreshold(src, max_value, self.adaptive_modes_map[adaptive_method], \
+                                   thresh_types_map[threshold_type], block_size + 1, c)
+        src = cv.cvtColor(src, cv.COLOR_GRAY2RGB)
+        src = opencv2tensor(src)
+        return (src,)
+
+
+class EqualizeHistogram:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "src": ("IMAGE",),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "eq"
+    CATEGORY = "Bmad/CV/Thresholding"
+
+    def eq(self, src):
+        src = tensor2opencv(src, 1)
+        eq = cv.equalizeHist(src)
+        eq = cv.cvtColor(eq, cv.COLOR_GRAY2RGB)
+        eq = opencv2tensor(eq)
+        return (eq,)
+
+
+class CLAHE:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "src": ("IMAGE",),
+                "clip_limit": ("INT", {"default": 2, "step": 1}),
+                # 40 is the default in documentation, but prob. a bit high no?
+                "tile_grid_x": ("INT", {"default": 8, "min": 2, "step": 1}),
+                "tile_grid_y": ("INT", {"default": 8, "min": 2, "step": 1}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "eq"
+    CATEGORY = "Bmad/CV/Thresholding"
+
+    def eq(self, src, clip_limit, tile_grid_x, tile_grid_y):
+        src = tensor2opencv(src, 1)
+        clahe = cv.createCLAHE(clipLimit=clip_limit, tileGridSize=(tile_grid_x, tile_grid_y))
+        eq = clahe.apply(src)
+        eq = cv.cvtColor(eq, cv.COLOR_GRAY2RGB)
+        eq = opencv2tensor(eq)
+        return (eq,)
+
+
+#TODO maybe add InRange and GainDivision
+
+
+# endregion
 
 NODE_CLASS_MAPPINGS = {
     "Framed Mask Grab Cut": FramedMaskGrabCut,
@@ -816,4 +995,9 @@ NODE_CLASS_MAPPINGS = {
     "SeamlessClone (simple)": SeamlessCloneSimpler,
     "Inpaint": Inpaint,
     "ChameleonMask": ChameleonMask,
+
+    "OtsuThreshold": OtsuThreshold,
+    "AdaptiveThresholding": AdaptiveThresholding,
+    "EqualizeHistogram": EqualizeHistogram,
+    "CLAHE": CLAHE,
 }
