@@ -38,14 +38,6 @@ except Exception as e:
     not_loaded.append("color clip ade20k node")
 
 try:
-    from .otsu_threshold_node import NODE_CLASS_MAPPINGS as otsu
-    loaded.append("otsu filter node (1)")
-except Exception as e:
-    otsu = {}
-    not_loaded.append("otsu filter node")
-    exceptions.append(e)
-
-try:
     from .extension_dependant_utilities import NODE_CLASS_MAPPINGS as extended
     loaded.append(f"extension dependent nodes ({len([*extended])})")
 except Exception as e:
@@ -54,10 +46,11 @@ except Exception as e:
     exceptions.append(e)
 
 
+
 import __main__
 import os
 
-NODE_CLASS_MAPPINGS = {**api, **simple, **cv_nodes, **cc_ade20k, **otsu, **extended}
+NODE_CLASS_MAPPINGS = {**api, **simple, **cv_nodes, **cc_ade20k, **extended}
 
 __all__ = ['NODE_CLASS_MAPPINGS']
 
