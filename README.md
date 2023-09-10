@@ -94,8 +94,9 @@ The `threshold` value is the same for both thresh image inputs; the `GC_FGD` fla
 
 #### Filter Contour  ⚠️
 
-Will output the contour with the best fitness, where the fitness function must be provided
+Will output contours depending on their fitness, where the fitness function must be provided
 within the node's text box.
+
 The expression may be long but can't have multiple instructions, only a single line that
 returns the fitness when evaluated.
 
@@ -104,13 +105,18 @@ returns the fitness when evaluated.
 usage
 </summary>
 
+`Select` argument options:
+- `MAX`, `MIN`: select the contour (singular) with higher and lower fitness respectively, the evaluated expression should result in a **number**. 
+- `FILTER`: filters the contours (plural) that satisfy the fitness condition, the evaluated expression should result in a **boolean**.
+- `MODE`: selects the contour (singular) whose fitness score is the mode of all the contours fitness scores. 
+
 To compute the fitness, the input parameters can be used with the following names:
 - `c`: the contour being evaluated, from input contours
 - `i`: input image (optional)
 - `a`: input auxiliary contour (optional)
 
-A list of functions, listed below, can be used over the inputs. 
-Additionally, functions from the math, opencv and numpy modules can be used with the prefixes: `m`; `cv`; and `np`, respectively.
+Functions from the math, opencv and numpy modules can be used with the prefixes: `m`; `cv`; and `np`, respectively.
+Additionally, functions listed below can also be used without a prefix. 
 
 
 The following is an example fitness function to get the contour that best matches the auxiliary contour (the lower the value, the better the match):
@@ -123,14 +129,15 @@ List of available functions:
 - aspect_ratio(contour): bounding rectangle's width divided by height
 - extent(contour): contour area divided by bounding rect area
 - solidity(contour): contour area divided by hull area
-- equi_diameter(contour): how round is the shape #math.sqrt(4 * area / math.pi)
-- center(contour):
-- contour_mask(contour, image):
-- mean_color(contour, image):
-- mean_intensity(contour, image):
-- extreme_points(contour):
+- equi_diameter(contour): how round is the shape `math.sqrt(4 * area / math.pi)`
+- center(contour)
+- contour_mask(contour, image)
+- mean_color(contour, image)
+- mean_intensity(contour, image)
+- extreme_points(contour)
+- intercepts_mask(contour, image)  `does not cache result`
 
-All the listed functions cache the values at least once (details vary); they don't create computational overhead 
+All the listed functions cache the results at least once (details vary); they don't create computational overhead 
 for being called more than once.
 This behavior was also added to the following list of opencv functions, which must be called **without the cv prefix**:
 
