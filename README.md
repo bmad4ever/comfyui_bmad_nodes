@@ -2,11 +2,11 @@
 
 Miscellaneous assortment of custom nodes for [ComfyUI](https://github.com/comfyanonymous/ComfyUI).
 
-The nature of the nodes is varied, and there it is not a comprehensive solution for any particular application. 
+The nature of the nodes is varied, and they do not provide a comprehensive solution for any particular kind of application. 
 The nodes can be roughly categorized in the following way:
 
 - api: to help setup api requests (barebones). 
-- computer vision: mainly for masking purposes via grabcut or contours.
+- computer vision: mainly for masking and collage purposes.
 - general utility: simplify the workflow setup or implement some missing basic functionality.
 
 ______________________
@@ -69,7 +69,7 @@ usage
 </summary>
 
 The `tresh` input should be a gray image, possibly a mask in black and white but not necessarily (read thresholds).
-It is used to set most of the grubcut input mask's flags, excluding `GC_BGD` (sure background) which are set by the "frame". 
+It is used to set most of the grabcut input mask's flags, excluding `GC_BGD` (sure background) which are set by the "frame". 
 
 The "frame" - border margins of the image - has its size defined via the `pixels` input, and won't affect sides set to 
 be ignored by the `frame_option` input (the corners common to neighbor sides will still be painted on the ignored sides).
