@@ -235,6 +235,7 @@ class FramedMaskGrabCut2:
                     "max": 255,
                     "step": 1
                 }),
+                "maybe_black_is_sure_background": ("BOOLEAN", {"default": False}),
                 "output_format": (image_output_formats_options, {
                     "default": image_output_formats_options[0]
                 })
@@ -247,7 +248,8 @@ class FramedMaskGrabCut2:
     CATEGORY = "Bmad/CV/GrabCut"
 
     def grab_cut(self, image, thresh_maybe, thresh_sure, iterations,
-                 margin, frame_option, binary_threshold, output_format):
+                 margin, frame_option, binary_threshold,
+                 maybe_black_is_sure_background, output_format):
         image = tensor2opencv(image)
 
         thresh_maybe = tensor2opencv(thresh_maybe, 1)
@@ -273,6 +275,9 @@ class FramedMaskGrabCut2:
             mask[:, -margin:] = cv.GC_BGD
         if include_left:
             mask[:, 0:margin] = cv.GC_BGD
+
+        if maybe_black_is_sure_background:
+            mask[thresh_maybe < binary_threshold] = cv.GC_BGD  # background
 
         mask, bg_model, fg_model = cv.grabCut(image, mask, None, bg_model, fg_model, iterCount=iterations,
                                               mode=cv.GC_INIT_WITH_MASK)
@@ -357,13 +362,13 @@ class DrawContours:
                     "max": 1000,
                     "step": 1
                 }),
-                "color": ("COLOR",),
                 "thickness": ("INT", {
                     "default": 5,
                     "min": -1,
                     "max": 32,
                     "step": 1
                 }),
+                "color": ("COLOR",),
             }
         }
 
@@ -974,10 +979,174 @@ class CLAHE:
         return (eq,)
 
 
+class FindThreshold:
+    """
+    simple cond examples:
+        cv.countNonZero(t)  > 100  # the number of non black pixels (white when using binary thresh type)
+        (t.size - cv.countNonZero(t)) / t.size > .50 # the percentage of black pixels is higher than 50%
+        # TODO can detect some shape(s) (requires optional inputs, and for current output maybe not that useful
+    if none is found, returns the last
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "src": ("IMAGE",),
+                "start_at": ("INT", {"default": 1, "min": 1, "max": 255, "step": 1}),
+                "end_at": ("INT", {"default": 255, "min": 1, "max": 255, "step": 1}),
+                "thresh_type": (thresh_types, {"default": thresh_types[0]}),
+                "downscale_factor": ("INT", {"default": 2, "min": 1, "step": 1}),
+                "condition": ("STRING", {"multiline": True, "default":
+                    "# Some expression that returns True or False\n"}),
+            },
+        } #TODO optional inputs
+
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "search"
+    CATEGORY = "Bmad/CV/Thresholding"
+
+    def search(self, src, start_at, end_at, thresh_type ,downscale_factor, condition):
+        import cv2
+        import numpy
+        import math
+
+        o_img = tensor2opencv(src, 1)
+        height, width = tuple(o_img.shape)
+        img = cv.resize(o_img, ( height//downscale_factor, width//downscale_factor), interpolation=cv.INTER_AREA)
+
+        max_v = max(start_at, end_at)
+        min_v = min(start_at, end_at)
+        range_to_check = range(min_v, max_v+1)
+        if end_at < start_at:
+            range_to_check = range_to_check.__reversed__()
+
+        condition = prepare_text_for_eval(condition)
+        cond_check = eval(f"lambda t: {condition}", {
+            "__builtins__": {},
+            "tuple": tuple, "list": list,
+            'm': math, 'cv': cv2, 'np': numpy
+        }, {})
+
+        thresh_value = end_at
+        for i in range_to_check:
+            _, thresh = cv.threshold(img, i, 255, thresh_types_map[thresh_type])
+            if cond_check(thresh):
+                thresh_value = i
+                break
+
+        _, img = cv.threshold(o_img, thresh_value, 255, thresh_types_map[thresh_type])
+        img = opencv2tensor(img)
+        return (img, )
+
+
 #TODO maybe add InRange and GainDivision
 
+# endregion
+
+
+# region Morphological operations
+
+class MorphologicOperation:
+    # I did not want to make this node, but alas, I found no suit w/ the top/black hat operation
+    # so might as well make a generic node w/ all the operations
+    # just return as BW and implement convert node
+
+    operation_map = {
+        "MORPH_ERODE": cv.MORPH_ERODE,
+        "MORPH_DILATE": cv.MORPH_DILATE,
+        "MORPH_OPEN": cv.MORPH_OPEN,
+        "MORPH_CLOSE": cv.MORPH_CLOSE,
+        "MORPH_GRADIENT": cv.MORPH_GRADIENT,
+        "MORPH_TOPHAT": cv.MORPH_TOPHAT,
+        "MORPH_BLACKHAT": cv.MORPH_BLACKHAT,
+    }
+    operations = list(operation_map.keys())
+
+    kernel_types_map = {
+        "MORPH_RECT": cv.MORPH_RECT,
+        "MORPH_ELLIPSE": cv.MORPH_ELLIPSE,
+        "MORPH_CROSS": cv.MORPH_CROSS,
+    }
+    kernel_types = list(kernel_types_map.keys())
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "src": ("IMAGE",),
+                "operation": (s.operations, s.operations),
+                "kernel_type": (s.kernel_types, s.kernel_types),
+                "kernel_size_x": ("INT", {"default": 4, "min": 2, "step": 2}),
+                "kernel_size_y": ("INT", {"default": 4, "min": 2, "step": 2}),
+                "iterations": ("INT", {"default": 1, "step": 1}),
+            },
+            # TODO maybe add optional input for custom kernel
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "apply"
+    CATEGORY = "Bmad/CV/Morphology"
+
+    def apply(self, src, operation, kernel_type, kernel_size_x, kernel_size_y, iterations):
+        img = tensor2opencv(src, 1)
+        kernel = cv.getStructuringElement(self.kernel_types_map[kernel_type], (kernel_size_x+1, kernel_size_y+1))
+        for i in range(iterations):
+            img = cv.morphologyEx(img, self.operation_map[operation], kernel)
+        return (opencv2tensor(img),)
+
+
+class MorphologicSkeletoning:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "src": ("IMAGE",),
+ #               "stop_criteria": (s.stop_criteria, {"default": s.stop_criteria[0]}),
+ #               "iteration_limit": ("INT", {"default": 12, "min": -1, "step": 1}),
+                # just use method,
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "compute"
+    CATEGORY = "Bmad/CV/Morphology"
+
+    def compute(self, src):
+        from skimage.morphology import skeletonize
+        img = tensor2opencv(src)
+        skel = skeletonize(img)
+        img = opencv2tensor(skel)
+        return (img, )
 
 # endregion
+
+
+class ConvertImg:
+    """ An explicit conversion, instead of using workarounds when using certain custom nodes. """
+    options_map = {
+        "RGBA": 4,
+        "RGB": 3,
+        "GRAY": 1,
+    }
+    options = list(options_map.keys())
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "image": ("IMAGE",),
+            "to": (s.options, {"default": s.options[1]})
+        }}
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "convert"
+    CATEGORY = "Bmad/CV"
+
+    def convert(self, image, to):
+        image = tensor2opencv(image, self.options_map[to])
+        return (opencv2tensor(image),)
+
 
 NODE_CLASS_MAPPINGS = {
     "Framed Mask Grab Cut": FramedMaskGrabCut,
@@ -1000,4 +1169,11 @@ NODE_CLASS_MAPPINGS = {
     "AdaptiveThresholding": AdaptiveThresholding,
     "EqualizeHistogram": EqualizeHistogram,
     "CLAHE": CLAHE,
+    "FindThreshold": FindThreshold,
+    # note: invert already exist: should be named ImageInvert, unless "overwritten" by some other custom node
+
+    "ConvertImg": ConvertImg,
+
+    "MorphologicOperation": MorphologicOperation,
+    "MorphologicSkeletoning": MorphologicSkeletoning,
 }
