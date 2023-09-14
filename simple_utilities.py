@@ -1,11 +1,6 @@
 import math
-
-import numpy as np
-import torch
 from PIL import ImageColor
-
 import nodes
-import comfy_extras.nodes_mask as nodes_mask
 from .dry import *
 
 
@@ -28,9 +23,9 @@ class ColorClip(ColorClip):
         return {
             "required": {
                 "image": ("IMAGE",),
-                "color": ("COLOR",),
                 "target": (s.OPERATION, {"default": 'TO_WHITE'}),
-                "complement": (s.OPERATION, {"default": 'TO_BLACK'})
+                "complement": (s.OPERATION, {"default": 'TO_BLACK'}),
+                "color": ("COLOR",),
             },
         }
 
@@ -465,7 +460,7 @@ class MaskGridNKSamplersAdvanced(nodes.KSamplerAdvanced):
 
     RETURN_TYPES = ("LATENT", )
     FUNCTION = "gen_batch"
-    CATEGORY = "Bmad/latent"
+    CATEGORY = "Bmad/experimental"
 
     def gen_batch(self,  model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, start_at_step, end_at_step, return_with_leftover_noise,
                   mask, rows, columns, mode, denoise=1.0):
@@ -721,5 +716,5 @@ NODE_CLASS_MAPPINGS = {
     "ControlNetHadamard": ControlNetHadamard,
     "ControlNetHadamard (manual)": ControlNetHadamardManual,
 
-    "FlatLatentsIntoSingleGrid": FlatLatentsIntoSingleGrid
+    "FlatLatentsIntoSingleGrid": FlatLatentsIntoSingleGrid,
 }
