@@ -30,7 +30,11 @@ class ColorClip(ColorClip):
         }
 
     def color_clip(self, image, color, target, complement):
-        image = self.clip(image, ImageColor.getcolor(color, "RGB"), target, complement)
+        # not keen on the idea of having colors around as hexcodes, better make this accept both formats
+        # than make COLOR always an hexcode.
+        image = self.clip(image=image, clip_color_255RGB=
+                          color if isinstance(color, list) else ImageColor.getcolor(color, "RGB")
+                        , target=target, complement=complement)
         return (image,)
 
 
@@ -687,10 +691,42 @@ class FlatLatentsIntoSingleGrid:
         return ({"samples":new_latent},)
 
 
+class ColorRGB:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"r": color255_INPUT, "g": color255_INPUT, "b": color255_INPUT}}
+
+    RETURN_TYPES = ("COLOR",)
+    FUNCTION = "ret"
+    CATEGORY = "Bmad/image"
+
+    def ret(self, r, g, b):
+        return ([r, g, b], )
+
+
+class ColorRGBFromHex:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"hex": ("STRING", {"default": "#000000"})}}
+
+    RETURN_TYPES = ("COLOR",)
+    FUNCTION = "ret"
+    CATEGORY = "Bmad/image"
+
+    def ret(self, hex):
+        import re
+        hex_color_pattern = r'^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$'
+        if re.match(hex_color_pattern, hex) is None:
+            print_yellow(f"ColorRGBFromHex node > The following is not a valid hex code:{hex}")
+        return (hex, )
+
+
 NODE_CLASS_MAPPINGS = {
     "String": StringNode,
     "Add String To Many": AddString2Many,
 
+    "Color (RGB)": ColorRGB,
+    "Color (hexadecimal)": ColorRGBFromHex,
     "Color Clip": ColorClip,
     "MonoMerge": MonoMerge,
 
