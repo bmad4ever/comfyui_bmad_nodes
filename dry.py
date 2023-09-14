@@ -44,20 +44,16 @@ class ColorClip:
         complement_color = [0, 0, 0] if complement == "TO_BLACK" else [255, 255, 255]
         target_color = [0, 0, 0] if target == "TO_BLACK" else [255, 255, 255]
 
-        # if complement is the same as clip color, then TO_**** in target will result in an empty canvas
-        # such behavior might leave users confused.
-        # by adding an extra step, the expected output is obtained in such cases
-        extra_complement_step = tuple(complement_color) == clip_color_255RGB
-        first_complement_color = complement_color if not extra_complement_step else [32, 32, 32]
+        match target:
+            case "NOTHING": new_image = np.array(image, copy=True)
+            case _: new_image = np.full_like(image, target_color)
 
-        if complement != "NOTHING":
-            image[np.any(image != clip_color_255RGB, axis=-1)] = first_complement_color
-        if target != "NOTHING":
-            image[np.all(image == clip_color_255RGB, axis=-1)] = target_color
-        if extra_complement_step:
-            image[np.all(image == first_complement_color, axis=-1)] = complement_color
+        complement_indexes = np.any(image != clip_color_255RGB, axis=-1)
+        match complement:
+            case "NOTHING": new_image[complement_indexes] = image[complement_indexes]
+            case _: new_image[complement_indexes] = complement_color
 
-        image = np.array(image).astype(np.float32) / 255.0
+        image = np.array(new_image).astype(np.float32) / 255.0
         image = torch.from_numpy(image)[None,]
 
         return image
@@ -200,6 +196,7 @@ rect_modes_map = {
 rect_modes = list(rect_modes_map.keys())
 
 
+# region handle nodes w/ arbitrary number of inputs
 
 def get_arg_name_from_multiple_inputs(type, index):
     """
@@ -211,3 +208,18 @@ def get_arg_name_from_multiple_inputs(type, index):
     """
     return f"{type}_{index+1}"
 
+
+def print_yellow(message):
+    print(f"\033[93m{message}\033[0m")
+
+
+def convert_list_args_to_args(node_name, **kwargs):
+    arg_list = []
+    for key, value in kwargs.items():
+        if len(value) > 1:
+            print_yellow(f"{node_name} node is not able to handle '{key}' lists; only the first elem will be used.")
+        value = value[0]
+        arg_list.append(value)
+    return tuple(arg_list)
+
+# endregion
