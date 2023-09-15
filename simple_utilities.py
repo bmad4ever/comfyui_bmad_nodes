@@ -1,7 +1,7 @@
 import math
-from PIL import ImageColor
 import nodes
 from .dry import *
+from .color_utils import ColorClip, color255_INPUT
 
 
 class StringNode:
@@ -20,21 +20,20 @@ class StringNode:
 class ColorClip(ColorClip):
     @classmethod
     def INPUT_TYPES(s):
-        return {
-            "required": {
-                "image": ("IMAGE",),
-                "target": (s.OPERATION, {"default": 'TO_WHITE'}),
-                "complement": (s.OPERATION, {"default": 'TO_BLACK'}),
-                "color": ("COLOR",),
-            },
-        }
+        return super().get_types(advanced=False)
 
     def color_clip(self, image, color, target, complement):
-        # not keen on the idea of having colors around as hexcodes, better make this accept both formats
-        # than make COLOR always an hexcode.
-        image = self.clip(image=image, clip_color_255RGB=
-                          color if isinstance(color, list) else ImageColor.getcolor(color, "RGB")
-                        , target=target, complement=complement)
+        image = self.clip(image, color, target, complement)
+        return (image,)
+
+
+class ColorClipAdvanced(ColorClip):
+    @classmethod
+    def INPUT_TYPES(s):
+        return super().get_types(advanced=True)
+
+    def color_clip(self, image, color, target, complement, color_a=None, color_b=None):
+        image = self.clip(image, color, target, complement, color_a, color_b)
         return (image,)
 
 
@@ -728,6 +727,7 @@ NODE_CLASS_MAPPINGS = {
     "Color (RGB)": ColorRGB,
     "Color (hexadecimal)": ColorRGBFromHex,
     "Color Clip": ColorClip,
+    "Color Clip (advanced)": ColorClipAdvanced,
     "MonoMerge": MonoMerge,
 
     "Repeat Into Grid (latent)": RepeatIntoGridLatent,

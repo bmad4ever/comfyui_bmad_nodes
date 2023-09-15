@@ -1,7 +1,6 @@
 import cv2 as cv
-import numpy as np
-from PIL import ImageColor
 from .dry import *
+from .color_utils import *
 
 
 # TODO these nodes return the mask, not the image with the background removed!
@@ -1148,6 +1147,69 @@ class ConvertImg:
         return (opencv2tensor(image),)
 
 
+class ColorDefaultDictionary:
+    default_color_dict = {
+        "red": (255, 0, 0),
+        "green": (0, 255, 0),
+        "blue": (0, 0, 255),
+        "white": (255, 255, 255),
+        "black": (0, 0, 0),
+        "yellow": (255, 255, 0),
+        "cyan": (0, 255, 255),
+        "magenta": (255, 0, 255),
+        "purple": (128, 0, 128),
+        "teal": (0, 128, 128),
+        "orange": (255, 165, 0),
+        "pink": (255, 192, 203),
+        #    "brown": (165, 42, 42),
+        #    "gray": (128, 128, 128),
+    }
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"number_of_colors": ("INT", {"default": 8, "min": 2, "max": 12})}}
+
+    RETURN_TYPES = ("COLOR_DICT",)
+    FUNCTION = "ret"
+    CATEGORY = "Bmad/CV"
+
+    def ret(self, number_of_colors):
+        dic = dict(list(self.default_color_dict.items())[0: number_of_colors])
+        return (dic,)
+
+
+class FindComplementaryColor:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "image": ("IMAGE",),
+            "color_dict": ("COLOR_DICT",),
+        },
+        "optional":
+            {
+                "mask": ("IMAGE", )
+            }
+        }
+
+    RETURN_TYPES = ("COLOR", "STRING", )
+    FUNCTION = "find_color"
+    CATEGORY = "Bmad/CV"
+
+    def find_color(self, image, color_dict, mask=None):
+        image = tensor2opencv(image, 3)
+
+        if mask is not None:
+            mask = tensor2opencv(mask, 1)
+
+            # this is a quality of life feature, so that it is easier to run the node and test stuff
+            # the behavior (img resize w/ lin. interpolation) can be avoided by setting up the data prior to this node
+            image = cv.resize(image, tuple(mask.shape), interpolation=cv.INTER_LINEAR)
+
+        color = find_complementary_color(image, color_dict, mask)
+        print((list(color_dict[color]), color))
+        return (list(color_dict[color]), color, )
+
+
 NODE_CLASS_MAPPINGS = {
     "Framed Mask Grab Cut": FramedMaskGrabCut,
     "Framed Mask Grab Cut 2": FramedMaskGrabCut2,
@@ -1176,4 +1238,7 @@ NODE_CLASS_MAPPINGS = {
 
     "MorphologicOperation": MorphologicOperation,
     "MorphologicSkeletoning": MorphologicSkeletoning,
+
+    "ColorDictionary": ColorDefaultDictionary,
+    "FindComplementaryColor": FindComplementaryColor,
 }

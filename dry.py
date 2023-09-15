@@ -1,16 +1,9 @@
 # D.R.Y ( Don't Repeat Yourself: cross file utilities )
 
-from abc import abstractmethod
+
 import torch
 import numpy as np
 from PIL import Image
-
-color255_INPUT = ("INT", {
-    "default": 0,
-    "min": 0,
-    "max": 255,
-    "step": 1
-})
 
 grid_len_INPUT = ("INT", {
     "default": 3,
@@ -18,45 +11,6 @@ grid_len_INPUT = ("INT", {
     "max": 8,
     "step": 1
 })
-
-
-class ColorClip:
-    OPERATION = [
-        "TO_BLACK",
-        "TO_WHITE",
-        "NOTHING"
-    ]
-
-    RETURN_TYPES = ("IMAGE",)
-    FUNCTION = "color_clip"
-    CATEGORY = "Bmad/image"
-
-    @classmethod
-    @abstractmethod
-    def INPUT_TYPES(s):
-        pass
-
-    def clip(self, image, clip_color_255RGB, target, complement):
-        image = 255. * image[0].cpu().numpy()
-        image = Image.fromarray(np.clip(image, 0, 255).astype(np.uint8))
-        image = np.array(image)
-
-        complement_color = [0, 0, 0] if complement == "TO_BLACK" else [255, 255, 255]
-        target_color = [0, 0, 0] if target == "TO_BLACK" else [255, 255, 255]
-
-        match target:
-            case "NOTHING": new_image = np.array(image, copy=True)
-            case _: new_image = np.full_like(image, target_color)
-
-        complement_indexes = np.any(image != clip_color_255RGB, axis=-1)
-        match complement:
-            case "NOTHING": new_image[complement_indexes] = image[complement_indexes]
-            case _: new_image[complement_indexes] = complement_color
-
-        image = np.array(new_image).astype(np.float32) / 255.0
-        image = torch.from_numpy(image)[None,]
-
-        return image
 
 
 image_output_formats_options_map = {
