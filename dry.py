@@ -24,16 +24,20 @@ def tensor2opencv(image_tensor, out_format_number_of_channels=3):
     """
     Args:
         image_tensor: tensor containing the image data.
-        out_format_number_of_channels: 3 for 'RGB' (default); 4 for 'RGBA' ; 1 for 'GRAY'
+        out_format_number_of_channels: 3 for 'RGB' (default); 4 for 'RGBA' ; 1 for 'GRAY';
+            or 0 for the same number of channels as image_tensor
     Returns: Numpy int8 array with a RGB24 encoded image
     """
+    in_format_NoC = 1 if len(list(image_tensor.size())) == 3 else image_tensor.size(dim=3)
+    if out_format_number_of_channels == 0:
+        out_format_number_of_channels = in_format_NoC
+
     accepted_out_formats = [1, 3, 4]
     if not out_format_number_of_channels in accepted_out_formats:
         raise ValueError(f"out_format_number_of_channels = {out_format_number_of_channels}, must be one of the "
                          f"following values: {accepted_out_formats}")
 
     img = np.clip(255. * image_tensor.cpu().numpy().squeeze(), 0, 255).astype(np.uint8)
-    in_format_NoC = 1 if len(list(image_tensor.size())) == 3 else image_tensor.size(dim=3)
     img = maybe_convert_img(img, in_format_NoC, out_format_number_of_channels)
 
     return img

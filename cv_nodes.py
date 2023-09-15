@@ -7,6 +7,87 @@ from .color_utils import *
 #       this is somewhat misleading. Consider changing the methods names.
 #       ( but to what? GrabCutMask? FramedMaskGrabCutMask? ...)
 
+# region types
+
+thresh_types_map = {
+    'BINARY': cv.THRESH_BINARY,
+    'BINARY_INV': cv.THRESH_BINARY_INV,
+    'TRUNC': cv.THRESH_TRUNC,
+    'TOZERO': cv.THRESH_TOZERO,
+    'TOZERO_INV': cv.THRESH_TOZERO_INV,
+}
+thresh_types = list(thresh_types_map.keys())
+
+border_types_map = {
+    'BORDER_CONSTANT': cv.BORDER_CONSTANT,
+    'BORDER_REPLICATE': cv.BORDER_REPLICATE,
+    'BORDER_REFLECT': cv.BORDER_REFLECT,
+    'BORDER_REFLECT101': cv.BORDER_REFLECT101,
+    'BORDER_WRAP': cv.BORDER_WRAP,
+    'BORDER_TRANSPARENT': cv.BORDER_TRANSPARENT,
+    'BORDER_REFLECT_101': cv.BORDER_REFLECT_101,
+    'BORDER_DEFAULT': cv.BORDER_DEFAULT,
+    'BORDER_ISOLATED': cv.BORDER_ISOLATED
+}
+
+border_types = list(border_types_map.keys())
+
+border_types_excluding_transparent = border_types_map.copy()
+border_types_excluding_transparent.pop("BORDER_TRANSPARENT")
+border_types_excluding_transparent = list(border_types_excluding_transparent.keys())
+
+# endregion
+
+
+# region misc
+
+class CopyMakeBorderSimple:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "border_size": ("INT", {"default": 64}),
+                "border_type": (border_types_excluding_transparent, border_types[0])
+            }}
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "make_border"
+    CATEGORY = "Bmad/CV"
+
+    def make_border(self, image, border_size, border_type):
+        image = tensor2opencv(image, 0)
+        image = cv.copyMakeBorder(image, border_size, border_size, border_size, border_size, border_types_map[border_type])
+        image = opencv2tensor(image)
+        return (image, )
+
+
+class ConvertImg:
+    """ An explicit conversion, instead of using workarounds when using certain custom nodes. """
+    options_map = {
+        "RGBA": 4,
+        "RGB": 3,
+        "GRAY": 1,
+    }
+    options = list(options_map.keys())
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "image": ("IMAGE",),
+            "to": (s.options, {"default": s.options[1]})
+        }}
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "convert"
+    CATEGORY = "Bmad/CV"
+
+    def convert(self, image, to):
+        image = tensor2opencv(image, self.options_map[to])
+        return (opencv2tensor(image),)
+
+# endregion
+
 
 # region grabcut nodes
 
@@ -67,7 +148,6 @@ class FramedMaskGrabCut:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "grab_cut"
-
     CATEGORY = "Bmad/CV/GrabCut"
 
     def grab_cut(self, image, thresh, iterations, margin, frame_option, threshold_FGD, threshold_PR_FGD, output_format):
@@ -833,25 +913,7 @@ class ChameleonMask:  # wtf would I name this node as?
 
 # region thresholding and eq
 
-thresh_types_map = {
-    'BINARY': cv.THRESH_BINARY,
-    'BINARY_INV': cv.THRESH_BINARY_INV,
-    'TRUNC': cv.THRESH_TRUNC,
-    'TOZERO': cv.THRESH_TOZERO,
-    'TOZERO_INV': cv.THRESH_TOZERO_INV,
-}
-thresh_types = list(thresh_types_map.keys())
 
-border_types_map = {
-    "BORDER_CONSTANT": cv.BORDER_CONSTANT,
-    "BORDER_REPLICATE": cv.BORDER_REPLICATE,
-    "BORDER_REFLECT": cv.BORDER_REFLECT,
-    "BORDER_WRAP": cv.BORDER_WRAP,
-    "BORDER_REFLECT_101": cv.BORDER_REFLECT_101,
-    "BORDER_TRANSPARENT": cv.BORDER_TRANSPARENT,
-    "BORDER_ISOLATED": cv.BORDER_ISOLATED
-}
-border_types = list(border_types_map.keys())
 
 
 class OtsuThreshold:
@@ -1122,31 +1184,6 @@ class MorphologicSkeletoning:
 # endregion
 
 
-class ConvertImg:
-    """ An explicit conversion, instead of using workarounds when using certain custom nodes. """
-    options_map = {
-        "RGBA": 4,
-        "RGB": 3,
-        "GRAY": 1,
-    }
-    options = list(options_map.keys())
-
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "image": ("IMAGE",),
-            "to": (s.options, {"default": s.options[1]})
-        }}
-
-    RETURN_TYPES = ("IMAGE",)
-    FUNCTION = "convert"
-    CATEGORY = "Bmad/CV"
-
-    def convert(self, image, to):
-        image = tensor2opencv(image, self.options_map[to])
-        return (opencv2tensor(image),)
-
-
 class ColorDefaultDictionary:
     default_color_dict = {
         "red": (255, 0, 0),
@@ -1211,6 +1248,9 @@ class FindComplementaryColor:
 
 
 NODE_CLASS_MAPPINGS = {
+    "ConvertImg": ConvertImg,
+    "CopyMakeBorder": CopyMakeBorderSimple,
+
     "Framed Mask Grab Cut": FramedMaskGrabCut,
     "Framed Mask Grab Cut 2": FramedMaskGrabCut2,
     "Rect Grab Cut": RectGrabCut,
@@ -1233,8 +1273,6 @@ NODE_CLASS_MAPPINGS = {
     "CLAHE": CLAHE,
     "FindThreshold": FindThreshold,
     # note: invert already exist: should be named ImageInvert, unless "overwritten" by some other custom node
-
-    "ConvertImg": ConvertImg,
 
     "MorphologicOperation": MorphologicOperation,
     "MorphologicSkeletoning": MorphologicSkeletoning,
