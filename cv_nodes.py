@@ -1,7 +1,7 @@
+import math
 import cv2 as cv
 from .dry import *
 from .color_utils import *
-
 
 # TODO these nodes return the mask, not the image with the background removed!
 #       this is somewhat misleading. Consider changing the methods names.
@@ -36,6 +36,7 @@ border_types_excluding_transparent = border_types_map.copy()
 border_types_excluding_transparent.pop("BORDER_TRANSPARENT")
 border_types_excluding_transparent = list(border_types_excluding_transparent.keys())
 
+
 # endregion
 
 
@@ -57,9 +58,10 @@ class CopyMakeBorderSimple:
 
     def make_border(self, image, border_size, border_type):
         image = tensor2opencv(image, 0)
-        image = cv.copyMakeBorder(image, border_size, border_size, border_size, border_size, border_types_map[border_type])
+        image = cv.copyMakeBorder(image, border_size, border_size, border_size, border_size,
+                                  border_types_map[border_type])
         image = opencv2tensor(image)
-        return (image, )
+        return (image,)
 
 
 class ConvertImg:
@@ -85,6 +87,7 @@ class ConvertImg:
     def convert(self, image, to):
         image = tensor2opencv(image, self.options_map[to])
         return (opencv2tensor(image),)
+
 
 # endregion
 
@@ -458,10 +461,10 @@ class DrawContours:
     INPUT_IS_LIST = True
 
     def draw(self, image, contours, index_to_draw, color, thickness):
-        image=image[0]
-        index_to_draw=index_to_draw[0]
-        color=color[0]
-        thickness=thickness[0]
+        image = image[0]
+        index_to_draw = index_to_draw[0]
+        color = color[0]
+        thickness = thickness[0]
 
         background = tensor2opencv(image)
 
@@ -561,15 +564,15 @@ class FilterContour:
         import cv2
         import numpy
 
-        fitness=fitness[0]
-        select=select[0]
+        fitness = fitness[0]
+        select = select[0]
 
         # region prepare inputs
         if image is not None:
-            image=image[0]
+            image = image[0]
             image = tensor2opencv(image)
         if aux_contour is not None:
-            aux_contour=aux_contour[0]
+            aux_contour = aux_contour[0]
 
         fitness = prepare_text_for_eval(fitness)
 
@@ -667,7 +670,8 @@ class FilterContour:
 
         def intercepts_mask(cnt, img):  # where img should be a binary mask
             gray = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
-            intersection = cv2.bitwise_and(gray, cv2.drawContours(np.zeros_like(gray), [cnt], 0, 255, thickness=cv2.FILLED))
+            intersection = cv2.bitwise_and(gray,
+                                           cv2.drawContours(np.zeros_like(gray), [cnt], 0, 255, thickness=cv2.FILLED))
             return cv2.countNonZero(intersection) > 0
 
         # endregion
@@ -913,9 +917,6 @@ class ChameleonMask:  # wtf would I name this node as?
 
 # region thresholding and eq
 
-
-
-
 class OtsuThreshold:
 
     @classmethod
@@ -1061,25 +1062,24 @@ class FindThreshold:
                 "condition": ("STRING", {"multiline": True, "default":
                     "# Some expression that returns True or False\n"}),
             },
-        } #TODO optional inputs
-
+        }  # TODO optional inputs
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "search"
     CATEGORY = "Bmad/CV/Thresholding"
 
-    def search(self, src, start_at, end_at, thresh_type ,downscale_factor, condition):
+    def search(self, src, start_at, end_at, thresh_type, downscale_factor, condition):
         import cv2
         import numpy
         import math
 
         o_img = tensor2opencv(src, 1)
         height, width = tuple(o_img.shape)
-        img = cv.resize(o_img, ( height//downscale_factor, width//downscale_factor), interpolation=cv.INTER_AREA)
+        img = cv.resize(o_img, (height // downscale_factor, width // downscale_factor), interpolation=cv.INTER_AREA)
 
         max_v = max(start_at, end_at)
         min_v = min(start_at, end_at)
-        range_to_check = range(min_v, max_v+1)
+        range_to_check = range(min_v, max_v + 1)
         if end_at < start_at:
             range_to_check = range_to_check.__reversed__()
 
@@ -1099,10 +1099,100 @@ class FindThreshold:
 
         _, img = cv.threshold(o_img, thresh_value, 255, thresh_types_map[thresh_type])
         img = opencv2tensor(img)
-        return (img, )
+        return (img,)
 
 
-#TODO maybe add InRange and GainDivision
+class InRangeHSV:
+    # w/ respect to documentation in :
+    #   https://docs.opencv.org/3.4/d2/de8/group__core__array.html#ga48af0ab51e36436c5d04340e036ce981
+    # both bounds are inclusive
+
+    @staticmethod
+    def get_saturation_and_value_bounds(color_a, color_b):
+        min_s = min(color_a[1], color_b[1])
+        max_s = max(color_a[1], color_b[1])
+        min_v = min(color_a[2], color_b[2])
+        max_v = max(color_a[2], color_b[2])
+        return min_s, max_s, min_v, max_v
+
+    @staticmethod
+    def hue_ignore(image, color_a, color_b):
+        ls, us, lv, uv = InRangeHSV.get_saturation_and_value_bounds(color_a, color_b)
+        return cv.inRange(image, (0, ls, lv), (179, us, uv))
+
+    @staticmethod
+    def hue_single(image, color_a, color_b):
+        ls, us, lv, uv = InRangeHSV.get_saturation_and_value_bounds(color_a, color_b)
+        lh = min(color_a[0], color_b[0])
+        uh = max(color_a[0], color_b[0])
+        print(f"lower:{(lh, ls, lv)} upper:{(uh, us, uv)}")
+        return cv.inRange(image, (lh, ls, lv), (uh, us, uv))
+
+    @staticmethod
+    def hue_split(image, color_a, color_b):
+        ls, us, lv, uv = InRangeHSV.get_saturation_and_value_bounds(color_a, color_b)
+        lh = min(color_a[0], color_b[0])
+        uh = max(color_a[0], color_b[0])
+        thresh_1 = cv.inRange(image, (0, ls, lv), (lh, us, uv))
+        thresh_2 = cv.inRange(image, (uh, ls, lv), (179, us, uv))
+        return cv.bitwise_or(thresh_1, thresh_2)
+
+    LARGEST_HUE_INTERVAL = False
+    SMALLEST_HUE_INTERVAL = True
+
+    @staticmethod
+    def choose_hue_method(color_a, color_b, interval_to_select):
+        single_interval = abs(color_a[0] - color_b[0])
+        split_interval = 180 - single_interval
+        return InRangeHSV.hue_split \
+            if split_interval < single_interval and interval_to_select == InRangeHSV.SMALLEST_HUE_INTERVAL \
+               or split_interval > single_interval and interval_to_select == InRangeHSV.LARGEST_HUE_INTERVAL \
+            else InRangeHSV.hue_single
+
+    @staticmethod
+    def hue_smallest(image, color_a, color_b):
+        hue_method = InRangeHSV.choose_hue_method(color_a, color_b, InRangeHSV.SMALLEST_HUE_INTERVAL)
+        return hue_method(image, color_a, color_b)
+
+    @staticmethod
+    def hue_largest(image, color_a, color_b):
+        hue_method = InRangeHSV.choose_hue_method(color_a, color_b, InRangeHSV.LARGEST_HUE_INTERVAL)
+        return hue_method(image, color_a, color_b)
+
+    hue_modes_map = {
+        "SMALLEST": hue_smallest,  # choose the smallest interval, independently of whether it requires a split or not
+        "LARGEST": hue_largest,  # same as above but chooses the largest interval
+        "IGNORE": hue_ignore,  # disregard hue entirely
+        "SINGLE": hue_single,  # single check, ignores whether used interval is the smallest or the largest
+        "SPLIT": hue_split,  # splits the check and ignores whether used interval is the smallest or the largest
+    }
+    hue_modes = list(hue_modes_map.keys())
+    HUE_MODE_SINGLE = hue_modes[3]
+    HUE_MODE_SPLIT = hue_modes[4]
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "rgb_image": ("IMAGE",),
+            "color_a": ("HSV_COLOR",),
+            "color_b": ("HSV_COLOR",),
+            "hue_mode": (s.hue_modes, {"default": s.hue_modes[0]})
+        }}
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "thresh"
+    CATEGORY = "Bmad/CV/Thresholding"
+
+    def thresh(self, rgb_image, color_a, color_b, hue_mode):
+        image = tensor2opencv(rgb_image, 3)
+        image = cv.cvtColor(image, cv.COLOR_RGB2HSV)
+        thresh = self.hue_modes_map[hue_mode](image, color_a, color_b)
+        thresh = cv.cvtColor(thresh, cv.COLOR_GRAY2RGB)
+        thresh = opencv2tensor(thresh)
+        return (thresh,)
+
+
+# TODO maybe add GainDivision
 
 # endregion
 
@@ -1152,7 +1242,7 @@ class MorphologicOperation:
 
     def apply(self, src, operation, kernel_type, kernel_size_x, kernel_size_y, iterations):
         img = tensor2opencv(src, 1)
-        kernel = cv.getStructuringElement(self.kernel_types_map[kernel_type], (kernel_size_x+1, kernel_size_y+1))
+        kernel = cv.getStructuringElement(self.kernel_types_map[kernel_type], (kernel_size_x + 1, kernel_size_y + 1))
         for i in range(iterations):
             img = cv.morphologyEx(img, self.operation_map[operation], kernel)
         return (opencv2tensor(img),)
@@ -1164,8 +1254,8 @@ class MorphologicSkeletoning:
         return {
             "required": {
                 "src": ("IMAGE",),
- #               "stop_criteria": (s.stop_criteria, {"default": s.stop_criteria[0]}),
- #               "iteration_limit": ("INT", {"default": 12, "min": -1, "step": 1}),
+                #               "stop_criteria": (s.stop_criteria, {"default": s.stop_criteria[0]}),
+                #               "iteration_limit": ("INT", {"default": 12, "min": -1, "step": 1}),
                 # just use method,
             },
         }
@@ -1179,10 +1269,13 @@ class MorphologicSkeletoning:
         img = tensor2opencv(src)
         skel = skeletonize(img)
         img = opencv2tensor(skel)
-        return (img, )
+        return (img,)
+
 
 # endregion
 
+
+# region color analysis
 
 class ColorDefaultDictionary:
     default_color_dict = {
@@ -1208,7 +1301,7 @@ class ColorDefaultDictionary:
 
     RETURN_TYPES = ("COLOR_DICT",)
     FUNCTION = "ret"
-    CATEGORY = "Bmad/CV"
+    CATEGORY = "Bmad/CV/Color A."
 
     def ret(self, number_of_colors):
         dic = dict(list(self.default_color_dict.items())[0: number_of_colors])
@@ -1222,15 +1315,15 @@ class FindComplementaryColor:
             "image": ("IMAGE",),
             "color_dict": ("COLOR_DICT",),
         },
-        "optional":
-            {
-                "mask": ("IMAGE", )
-            }
+            "optional":
+                {
+                    "mask": ("IMAGE",)
+                }
         }
 
-    RETURN_TYPES = ("COLOR", "STRING", )
+    RETURN_TYPES = ("COLOR", "STRING",)
     FUNCTION = "find_color"
-    CATEGORY = "Bmad/CV"
+    CATEGORY = "Bmad/CV/Color A."
 
     def find_color(self, image, color_dict, mask=None):
         image = tensor2opencv(image, 3)
@@ -1244,8 +1337,178 @@ class FindComplementaryColor:
 
         color = find_complementary_color(image, color_dict, mask)
         print((list(color_dict[color]), color))
-        return (list(color_dict[color]), color, )
+        return (list(color_dict[color]), color,)
 
+
+class EstimateColorIntervalHSV:
+    """
+    if leeway is equal to 1 then the interval is defined considering the max absolute deviation from the samples means
+    if leeway is 2, then the interval is doubled, if set to .5 halved, etc...
+
+    the returned hue_mode indicates if the hue range should be split into two when using InRange,
+    when the hue interval crosses the 0/180 boundary.
+    """
+
+    @staticmethod
+    def double_maxdev_interval(means, hsv_samples, hues_rad, hue_cmean_rad, leeway):
+        from math import pi
+        max_deviation_saturation = np.max(np.abs(hsv_samples[:, :, 1] - means[1]))
+        max_deviation_value = np.max(np.abs(hsv_samples[:, :, 2] - means[2]))
+        max_deviation_hue = max([min(abs(pi * 2 - abs(hue_cmean_rad - a)), abs(hue_cmean_rad - a)) for a in hues_rad])
+        max_deviation_hue = np.rad2deg(max_deviation_hue) / 2  # from a [0, 2pi] world to [0, 180[ again
+        return np.array([max_deviation_hue, max_deviation_saturation, max_deviation_value])*leeway
+
+    @staticmethod
+    def stdev(means, hsv_samples, hues_rad, hue_cmean_rad, leeway):
+        from statistics import stdev
+        stddev_saturation = stdev(hsv_samples[:, :, 1][0], means[1])
+        stddev_value = stdev(hsv_samples[:, :, 2][0], means[2])
+        hue_circ_stddev = circular_stdev(hues_rad)
+        hue_stddev = np.rad2deg(hue_circ_stddev) / 2  # from a [0, 2pi] world to [0, 180[ again
+        return np.array([hue_stddev, stddev_saturation, stddev_value])*leeway
+
+    @staticmethod
+    def leeway_only(means, hsv_samples, hues_rad, hue_cmean_rad, leeway):
+        saturation = leeway
+        value = leeway
+        hue = leeway*180/255  # scale according to the hue range
+        return np.array([hue, saturation, value])
+
+
+    interval_modes_map = {
+        "2xStdDev * leeway": stdev,
+        "2xMaxDev * leeway": double_maxdev_interval,
+        "mean +- leeway": leeway_only,
+    }
+    interval_modes = list(interval_modes_map.keys())
+
+    # TODO Individual leeways.
+    #  if I know apriori that hue won't change, set it to only leeway, but use stddev for value, for example.
+
+    @classmethod
+    def INPUT_TYPES(s):
+        import sys
+        return {"required": {
+            "rgb_image": ("IMAGE",),
+            "sample_size": ("INT", {"default": 1000, "min": 1, "max": 256 * 256, }),
+            "leeway": ("FLOAT", {"default": 3, "min": 0.1, "max": 100, "step": 0.05}),
+            "interval_mode": (s.interval_modes, s.interval_modes[0]),
+            "sampling_seed": ("INT", {"default": 0, "min": 0, "max": sys.maxsize, "step": 1})
+        }}
+
+    RETURN_TYPES = ("HSV_COLOR", "HSV_COLOR", "HSV_COLOR", InRangeHSV.hue_modes)   # TODO fix last output name (prob. via js)
+    FUNCTION = "estimate"
+    CATEGORY = "Bmad/CV/Color A."
+
+    def estimate(self, rgb_image, sample_size, leeway, interval_mode, sampling_seed):
+        image = tensor2opencv(rgb_image, 3)
+        image_width = image.shape[1]
+
+        # sample pixels
+        np.random.seed(sampling_seed)
+        random_indices = np.random.choice(image.shape[0] * image_width, sample_size, replace=False)
+        sample_pixels = np.array([image[i // image_width, i % image_width] for i in random_indices])
+        sample_pixels = sample_pixels.reshape((1, -1, 3))
+
+        # only convert samples to HSV
+        sample_pixels_hsv = cv.cvtColor(sample_pixels, cv.COLOR_RGB2HSV)
+        print("start")
+        print(sample_pixels_hsv[0])
+
+        # Calculate mean for each channel
+        # note: hue requires circular mean
+        hues_degs = sample_pixels_hsv[0, :, 0].astype(float) * 2  # turn to 360 degrees
+        hues_rads = [math.radians(h) for h in hues_degs]
+        hue_cmean_rad = circular_mean(angles_in_rads=hues_rads)
+        mean_saturation = np.mean(sample_pixels_hsv[0, :, 1])
+        mean_value = np.mean(sample_pixels_hsv[0, :, 2])
+        means = np.array([math.degrees(hue_cmean_rad)/2, mean_saturation, mean_value])
+
+        # Compute interval for the selected interval mode
+        half_interval = self.interval_modes_map[interval_mode](
+            means, sample_pixels_hsv, hues_rads, hue_cmean_rad, leeway)
+
+        # hsv bounds
+        lower = means - half_interval
+        upper = means + half_interval
+
+        # force hue bounds if interval > 90
+        if half_interval[0] >= 90:
+            lower[0] = 0
+            upper[0] = 179  # note: return a color that exists, thus 179
+
+        # check if hue needs to be split into 2 intervals when using inRange
+        # note: 180 means zero is included, a one value split
+        hue_mode = InRangeHSV.HUE_MODE_SPLIT\
+            if lower[0] < 0 or upper[0] >= 180\
+            else InRangeHSV.HUE_MODE_SINGLE
+
+        # correct hue bounds to [0, 180[
+        lower[0] = (lower[0] + 180) % 180
+        upper[0] = upper[0] % 180
+
+        # clamp saturation and value limits to return actual colors in the outputs
+        lower[1] = max(lower[1], 0)
+        lower[2] = max(lower[2], 0)
+        upper[1] = min(upper[1], 255)
+        upper[2] = min(upper[2], 255)
+
+        ret = (upper.round(), lower.round(), means.round(), hue_mode)
+        return ret
+
+
+class ColorToHSVColor:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "rgb_color": ("COLOR",)
+        }}
+
+    RETURN_TYPES = ("HSV_COLOR",)
+    FUNCTION = "convert"
+    CATEGORY = "Bmad/CV/Color A."
+
+    def convert(self, rgb_color):
+        from colorsys import rgb_to_hsv
+        rgb_color = setup_color_to_correct_type(rgb_color)
+        (r, g, b) = tuple(rgb_color)
+        rgb_color = (r / 255, g / 255, b / 255)
+        (h, s, v) = rgb_to_hsv(*rgb_color)
+        hsv = (int(h * 179), int(s * 255), int(v * 255))
+        return (hsv,)
+
+
+class KMeansColor:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "image": ("IMAGE",),
+            "number_of_colors": ("INT", {"default": 2, "min": 2}),
+            "max_iterations": ("INT", {"default": 100}),
+            "eps": ("FLOAT", {"default": .2})
+        }}
+
+    RETURN_TYPES = ("IMAGE", )
+    FUNCTION = "get_dominant_colors"
+    CATEGORY = "Bmad/CV/Color A."
+
+    def get_dominant_colors(self, image, number_of_colors, max_iterations, eps):
+        image = tensor2opencv(image, 3)
+        pixels = image.reshape(-1, 3)
+        pixels = np.float32(pixels)
+
+        # define criteria and apply kmeans
+        criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, max_iterations, eps)
+        _, labels, centers = cv.kmeans(pixels, number_of_colors, None, criteria, 10, cv.KMEANS_RANDOM_CENTERS)
+
+        # convert back into uint8, and make original image
+        center = np.uint8(centers)
+        res = center[labels.flatten()]
+        res2 = res.reshape((image.shape))
+        res2 = opencv2tensor(res2)
+        return (res2, )
+
+# endregion
 
 NODE_CLASS_MAPPINGS = {
     "ConvertImg": ConvertImg,
@@ -1272,6 +1535,7 @@ NODE_CLASS_MAPPINGS = {
     "EqualizeHistogram": EqualizeHistogram,
     "CLAHE": CLAHE,
     "FindThreshold": FindThreshold,
+    "InRange (hsv)": InRangeHSV,
     # note: invert already exist: should be named ImageInvert, unless "overwritten" by some other custom node
 
     "MorphologicOperation": MorphologicOperation,
@@ -1279,4 +1543,7 @@ NODE_CLASS_MAPPINGS = {
 
     "ColorDictionary": ColorDefaultDictionary,
     "FindComplementaryColor": FindComplementaryColor,
+    "EstimateColorInterval (hsv)": EstimateColorIntervalHSV,
+    "KMeansColor": KMeansColor,
+    "RGB to HSV": ColorToHSVColor
 }

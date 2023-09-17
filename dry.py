@@ -3,7 +3,7 @@
 
 import torch
 import numpy as np
-from PIL import Image
+
 
 grid_len_INPUT = ("INT", {
     "default": 3,
@@ -181,3 +181,42 @@ def convert_list_args_to_args(node_name, **kwargs):
     return tuple(arg_list)
 
 # endregion
+
+
+#region math utils
+
+def circular_mean(angles_in_rads):
+    """
+    Adapted from https://en.wikipedia.org/wiki/Circular_mean.
+    Args:
+        angles_in_rads: exactly what the name implies
+    Returns:
+        the circular mean in radians
+    """
+    import math
+    mean_cos = sum(math.cos(angle) for angle in angles_in_rads) / len(angles_in_rads)
+    mean_sin = sum(math.sin(angle) for angle in angles_in_rads) / len(angles_in_rads)
+    mean_angle = math.atan2(mean_sin, mean_cos)
+    if mean_angle < 0:
+        mean_angle += math.pi*2
+    return mean_angle
+
+def circular_stdev(angles_in_rads):
+    """
+    Args:
+        angles_in_rads: exactly what the name implies
+    Returns:
+        the circular standard deviation
+    """
+    import math
+    mean_cos = sum(math.cos(angle) for angle in angles_in_rads) / len(angles_in_rads)
+    mean_sin = sum(math.sin(angle) for angle in angles_in_rads) / len(angles_in_rads)
+    R = math.sqrt(mean_cos**2 + mean_sin**2)  # ]0, 1] where 0 = dispersed and 1 = concentrated
+    if R >= 1:
+        return 0
+    if R <= 29e-10:
+        return math.pi * 2
+    std_dev = math.sqrt(-2 * math.log(R))
+    return std_dev
+
+#endregion

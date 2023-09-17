@@ -13,6 +13,12 @@ color255_INPUT = ("INT", {
 })
 
 
+def setup_color_to_correct_type(color):
+    if color is None:
+        return None
+    return color if isinstance(color, list) else ImageColor.getcolor(color, "RGB")
+
+
 class ColorClip:
     OPERATION = [
         "TO_BLACK",
@@ -43,10 +49,6 @@ class ColorClip:
         return types
 
     def clip(self, image, color, target, complement, color_a=None, color_b=None):
-        def setup_color_to_correct_type(color):
-            if color is None:
-                return None
-            return color if isinstance(color, list) else ImageColor.getcolor(color, "RGB")
 
         color = setup_color_to_correct_type(color)
         color_a = setup_color_to_correct_type(color_a)
