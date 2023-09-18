@@ -1125,7 +1125,6 @@ class InRangeHSV:
         ls, us, lv, uv = InRangeHSV.get_saturation_and_value_bounds(color_a, color_b)
         lh = min(color_a[0], color_b[0])
         uh = max(color_a[0], color_b[0])
-        print(f"lower:{(lh, ls, lv)} upper:{(uh, us, uv)}")
         return cv.inRange(image, (lh, ls, lv), (uh, us, uv))
 
     @staticmethod
@@ -1336,7 +1335,6 @@ class FindComplementaryColor:
             image = cv.resize(image, tuple(mask.shape), interpolation=cv.INTER_LINEAR)
 
         color = find_complementary_color(image, color_dict, mask)
-        print((list(color_dict[color]), color))
         return (list(color_dict[color]), color,)
 
 
@@ -1412,8 +1410,6 @@ class EstimateColorIntervalHSV:
 
         # only convert samples to HSV
         sample_pixels_hsv = cv.cvtColor(sample_pixels, cv.COLOR_RGB2HSV)
-        print("start")
-        print(sample_pixels_hsv[0])
 
         # Calculate mean for each channel
         # note: hue requires circular mean
