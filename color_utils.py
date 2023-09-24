@@ -97,7 +97,7 @@ class ColorClip:
         return image
 
 
-def compute_inverse_squared_difference_matrix(image, target_color):
+def compute_inverse_squared_difference_matrix(image, target_color, power=2):
     """
     Compute an inverse squared difference matrix representing the inverse squared euclidean distance of each pixel in
     the image to the target color.
@@ -105,19 +105,19 @@ def compute_inverse_squared_difference_matrix(image, target_color):
     Args:
         image (numpy.ndarray): The input image (RGB format).
         target_color (tuple): The target color in RGB format.
-
+        power (float): Instead of using the squared difference, use the given power instead.
     Returns:
         numpy.ndarray: A matrix where each element is the inverse squared Euclidean distance between the pixel color
         and the target color.
     """
-    squared_diff_matrix = np.sum((image - target_color) ** 2, axis=2)
+    squared_diff_matrix = np.sum(abs(image - target_color) ** power, axis=2)
     inverse_squared_diff_matrix = 1 / (1 + squared_diff_matrix)
     return inverse_squared_diff_matrix
 
 
-def compute_average_isd(image, target_color, mask=None):
+def compute_average_isd(image, target_color, mask=None, power=2):
     # difference matrix with the euclidean distances
-    diff_matrix = compute_inverse_squared_difference_matrix(image, target_color)
+    diff_matrix = compute_inverse_squared_difference_matrix(image, target_color, power)
 
     # return mean or apply the mask if provided
     if mask is None:
@@ -133,7 +133,7 @@ def compute_average_isd(image, target_color, mask=None):
     return average_isd
 
 
-def find_complementary_color(image, color_dict, mask=None):
+def find_complementary_color(image, color_dict, mask=None, power=2):
     """
     Selects the color from the given dictionary that has the least similar colors present in the image by
     finding the color with the lowest ISD average; where isd is the inverse squared difference from a pixel to the color.
@@ -145,6 +145,7 @@ def find_complementary_color(image, color_dict, mask=None):
         image: The src image used to compute the complement.
         color_dict: Dictionary whose keys should be the names of the colors and the values RGB coded color as a tuple.
         mask: Optional mask that indicates the target pixels. The distance to pixels outside the mask is disregarded.
+        power: Override power of 2 in ISD, will use this instead of squaring.
     Returns:
         The complement color name, as defined in color_dict.
     """
@@ -152,7 +153,7 @@ def find_complementary_color(image, color_dict, mask=None):
     closest_color = None
 
     for color_name, color_rgb in color_dict.items():
-        avg_isd = compute_average_isd(image, color_rgb, mask)
+        avg_isd = compute_average_isd(image, color_rgb, mask, power)
 
         if avg_isd < lowest_avg_distance:
             lowest_avg_distance = avg_isd

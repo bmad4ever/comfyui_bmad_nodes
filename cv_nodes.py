@@ -154,7 +154,6 @@ class FramedMaskGrabCut:
     CATEGORY = "Bmad/CV/GrabCut"
 
     def grab_cut(self, image, thresh, iterations, margin, frame_option, threshold_FGD, threshold_PR_FGD, output_format):
-        import sys
         image = tensor2opencv(image)
         thresh = tensor2opencv(thresh, 1)
 
@@ -1313,6 +1312,7 @@ class FindComplementaryColor:
         return {"required": {
             "image": ("IMAGE",),
             "color_dict": ("COLOR_DICT",),
+            "power": ("FLOAT", {"default": 2, "min": 2, "max": 10, "step": "0.2"}),
         },
             "optional":
                 {
@@ -1324,7 +1324,7 @@ class FindComplementaryColor:
     FUNCTION = "find_color"
     CATEGORY = "Bmad/CV/Color A."
 
-    def find_color(self, image, color_dict, mask=None):
+    def find_color(self, image, color_dict, power, mask=None):
         image = tensor2opencv(image, 3)
 
         if mask is not None:
@@ -1334,7 +1334,7 @@ class FindComplementaryColor:
             # the behavior (img resize w/ lin. interpolation) can be avoided by setting up the data prior to this node
             image = cv.resize(image, tuple(mask.shape), interpolation=cv.INTER_LINEAR)
 
-        color = find_complementary_color(image, color_dict, mask)
+        color = find_complementary_color(image, color_dict, mask, power)
         return (list(color_dict[color]), color,)
 
 
@@ -1481,7 +1481,7 @@ class KMeansColor:
             "image": ("IMAGE",),
             "number_of_colors": ("INT", {"default": 2, "min": 2}),
             "max_iterations": ("INT", {"default": 100}),
-            "eps": ("FLOAT", {"default": .2})
+            "eps": ("FLOAT", {"default": .2, "step": 0.05})
         }}
 
     RETURN_TYPES = ("IMAGE", )
