@@ -1350,8 +1350,8 @@ class EstimateColorIntervalHSV:
     @staticmethod
     def double_maxdev_interval(means, hsv_samples, hues_rad, hue_cmean_rad, leeway):
         from math import pi
-        max_deviation_saturation = np.max(np.abs(hsv_samples[:, :, 1] - means[1]))
-        max_deviation_value = np.max(np.abs(hsv_samples[:, :, 2] - means[2]))
+        max_deviation_saturation = np.max(np.abs(hsv_samples[:, :, 1].astype(float) - means[1]))
+        max_deviation_value = np.max(np.abs(hsv_samples[:, :, 2].astype(float) - means[2]))
         max_deviation_hue = max([min(abs(pi * 2 - abs(hue_cmean_rad - a)), abs(hue_cmean_rad - a)) for a in hues_rad])
         max_deviation_hue = np.rad2deg(max_deviation_hue) / 2  # from a [0, 2pi] world to [0, 180[ again
         return np.array([max_deviation_hue, max_deviation_saturation, max_deviation_value])*leeway
