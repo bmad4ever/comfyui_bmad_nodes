@@ -219,4 +219,42 @@ def circular_stdev(angles_in_rads):
     std_dev = math.sqrt(-2 * math.log(R))
     return std_dev
 
+def circ_quantiles(samples, center, quantiles):
+    """
+    Args:
+        samples: the sample data in radians.
+        center: center is the point at quantile 0.5.
+        quantiles (list): quantiles to fetch.
+    Returns:
+        The respective values for each quantile.
+    """
+    offset_data = [s - center + (0 if s >= center else 2 * np.pi) for s in samples]
+    adjusted_percentiles = [p - .5 + (0 if p >= .5 else 1) for p in quantiles]
+    values_at_percentiles = np.quantile(offset_data, adjusted_percentiles)
+    adjusted_values = [(v + center) % (2 * np.pi) for v in values_at_percentiles]
+    return adjusted_values
+
+
+def pseudo_circ_median(mean, mode, interval_size=0):
+    """
+    Similar computation to: (mean + mode)/2;
+     but taking into account the circular nature of the data.
+    Args:
+        mean: the mean either in radians or within the given interval
+        mode: the mode either in radians or within the given interval
+        interval_size: the interval in which the source data is contained,
+         i.e. specifies the upper bound which coincides with the lower bound due to the circular nature of the data.
+    Returns:
+        the pseudo median either in radians or within the given interval.
+    """
+    if interval_size > 0:
+        mean = mean / interval_size * 2 * np.pi
+        mode = mode / interval_size * 2 * np.pi
+
+    pseudo_median = circular_mean([mean, mode])
+
+    if interval_size > 0:
+        pseudo_median = pseudo_median / (2 * np.pi) * interval_size
+
+    return pseudo_median
 #endregion
