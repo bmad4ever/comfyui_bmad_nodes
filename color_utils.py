@@ -171,10 +171,12 @@ class Interval:
         return self.value[key]
 
     def scale_by_factor(self, scale_factor, center=0):
-        if center < self.value[0] or center > self.value[1]:
-            raise ("Invalid center. Center must be contained within lower and upper bounds.")
         bounds = [self.value[0], self.value[1]]
+
         if center != 0:
+            if center < self.value[0] or center > self.value[1]:
+                raise Exception(f"Invalid center. Center must be contained within lower and upper bounds:"
+                                f" [{bounds}], but got -> {center}")
             left_interval = center - bounds[0]
             right_interval = bounds[1] - center
             return Interval([center - left_interval * scale_factor, center + right_interval * scale_factor])
@@ -264,7 +266,7 @@ class HSV_Samples:
         return st.mode(self.samples[:, 2])[0]
 
     @cached_property
-    def h_pmedian(self):
+    def h_pseudo_median(self):
         return pseudo_circ_median(self.h_avg, self.h_mode, 180)
 
     @cached_property
@@ -303,42 +305,50 @@ class HSV_Samples:
     def v_quant2(self, lower, upper):
         return Interval([self.v_quant(lower), self.v_quant(upper)])
 
+    @cached_property
+    def h_median(self):  # prob. the best guess for most cases
+        center_rads = np.deg2rad(self.h_pseudo_median * 2)
+        value = circ_quantiles(self.hues_rads, center_rads, [0.5])[0]
+        return self.rad2hue(value)
+
     @lru_cache(maxsize=2)
-    def h_quant(self, center, quantile):
+    def h_quant(self, quantile):
         """
         Args:
             center: hue center [0, 179]
             quantile: [0, 1]
         Returns:
         """
-        center_rads = np.deg2rad(center * 2)
+        center_rads = np.deg2rad(self.h_median * 2)
         value = circ_quantiles(self.hues_rads, center_rads, [quantile])[0]
         value = self.rad2hue(value)
 
         # unfix values (fix in the last step, after all changes are made to the interval)
-        if quantile < 0.5 and value > center:
-            value -= 360
-        if quantile > 0.5 and value < center:
-            value += 360
+        if quantile < 0.5 and value > self.h_median:
+            value -= 180
+        if quantile > 0.5 and value < self.h_median:
+            value += 180
 
         return value
 
     @lru_cache(maxsize=2)
-    def h_quant2(self, center, lower, upper) -> Interval:
+    def h_quant2(self, lower, upper) -> Interval:
         if lower > 0.5 or upper < 0.5:
             raise ("Arguments outside of expected range"
                    "\nexpected: lower <= 0.5 <= higher"
                    f"\ngot: lower={lower} and higher={upper}")
 
-        center_rads = np.deg2rad(center * 2)
-        bounds = circ_quantiles(self.samples["hues_rad"], center_rads, [lower, upper])
+        print(f"center:{self.h_median}")
+        center_rads = np.deg2rad(self.h_median * 2)
+        bounds = circ_quantiles(self.hues_rads, center_rads, [lower, upper])
         bounds = [self.rad2hue(q) for q in bounds]
+        print(f"bounds:{bounds}")
 
         # unfix values (fix in the last step, after all changes are made to the interval)
-        if bounds[0] > center:
-            bounds[0] -= 360
-        if bounds[1] < center:
-            bounds[1] += 360
+        if bounds[0] > self.h_median:
+            bounds[0] -= 180
+        if bounds[1] < self.h_median:
+            bounds[1] += 180
 
         return Interval(bounds)
 
