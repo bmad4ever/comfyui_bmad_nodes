@@ -1,5 +1,5 @@
 # D.R.Y ( Don't Repeat Yourself: cross file utilities )
-
+from typing import Callable
 
 import torch
 import numpy as np
@@ -111,6 +111,7 @@ def cache_with_ids(single: bool = False):
 
     return decorator
 
+# region prepare strings for eval
 
 def prepare_text_for_eval(text, complementary_purge_list=None):
     import re
@@ -130,6 +131,21 @@ def prepare_text_for_eval(text, complementary_purge_list=None):
 
     return text
 
+def filter_expression_names(accept_filter_func: Callable[[str], bool], expression: str) -> list[str]:
+    """
+    Filters name tokens from the given expression.
+    Usage example: filter properties so that only the ones in the expression are added to the eval scope.
+    """
+    import io
+    import tokenize
+    tokens = tokenize.tokenize(io.BytesIO(expression.encode('utf-8')).readline)
+    relevant_names_in_expression = []
+    for token_type, token_value, _, _, _ in tokens:
+        if token_type == tokenize.NAME and token_value and accept_filter_func(token_value):
+            relevant_names_in_expression.append(token_value)
+    return relevant_names_in_expression
+
+# endregion
 
 rect_modes_map = {
         'top-left XY + WH': {
@@ -201,6 +217,7 @@ def circular_mean(angles_in_rads):
         mean_angle += math.pi*2
     return mean_angle
 
+
 def circular_stdev(angles_in_rads):
     """
     Args:
@@ -219,19 +236,22 @@ def circular_stdev(angles_in_rads):
     std_dev = math.sqrt(-2 * math.log(R))
     return std_dev
 
+
 def circ_quantiles(samples, center, quantiles):
     """
     Args:
         samples: the sample data in radians.
-        center: center is the point at quantile 0.5.
+        center: center defines the point at quantile 0.5.
         quantiles (list): quantiles to fetch.
     Returns:
         The respective values for each quantile.
     """
-    offset_data = [s - center + (0 if s >= center else 2 * np.pi) for s in samples]
-    adjusted_percentiles = [p - .5 + (0 if p >= .5 else 1) for p in quantiles]
-    values_at_percentiles = np.quantile(offset_data, adjusted_percentiles)
-    adjusted_values = [(v + center) % (2 * np.pi) for v in values_at_percentiles]
+    tau = 2*np.pi
+    offset = np.pi - center
+    offset_data = [(s + offset + tau) % tau for s in samples]
+    values_at_quantiles = np.quantile(offset_data, quantiles)
+    adjusted_values = [(v - offset + tau) % tau for v in values_at_quantiles]
+
     return adjusted_values
 
 
@@ -257,4 +277,6 @@ def pseudo_circ_median(mean, mode, interval_size=0):
         pseudo_median = pseudo_median / (2 * np.pi) * interval_size
 
     return pseudo_median
+
+
 #endregion
