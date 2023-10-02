@@ -1,9 +1,10 @@
 # utils for color related stuff
+from functools import lru_cache, cached_property
 
 import torch
 import numpy as np
 from PIL import ImageColor, Image
-from .dry import print_yellow
+from .dry import print_yellow, circ_quantiles, pseudo_circ_median, circular_stdev, circular_mean
 
 color255_INPUT = ("INT", {
     "default": 0,
@@ -160,3 +161,194 @@ def find_complementary_color(image, color_dict, mask=None, power=2):
             closest_color = color_name
 
     return closest_color
+
+
+class Interval:
+    def __init__(self, value: list):
+        self.value = [value[0], value[-1]]
+
+    def __getitem__(self, key):
+        return self.value[key]
+
+    def scale_by_factor(self, scale_factor, center=0):
+        if center < self.value[0] or center > self.value[1]:
+            raise ("Invalid center. Center must be contained within lower and upper bounds.")
+        bounds = [self.value[0], self.value[1]]
+        if center != 0:
+            left_interval = center - bounds[0]
+            right_interval = bounds[1] - center
+            return Interval([center - left_interval * scale_factor, center + right_interval * scale_factor])
+
+        half_interval = (bounds[1] - bounds[0]) / 2
+        bounds = [bounds[0] + half_interval, bounds[1] - half_interval]  # set bounds to center
+        half_new_interval = half_interval * scale_factor
+        return Interval([bounds[0] - half_new_interval, bounds[1] + half_new_interval])
+
+    def scale_by_constant(self, units, units2=0):
+        bounds = [self.value[0], self.value[1]]
+        bounds[0] -= units / 2 if units2 == 0 else units
+        bounds[1] += units / 2 if units2 == 0 else units2
+        return Interval(bounds)
+
+
+class HSV_Samples:
+    """
+    Stores HSV samples and caches results from computations done over these samples.
+    """
+
+    def __init__(self, samples):
+        self.samples = samples
+
+    @staticmethod
+    def rad2hue(rad: float) -> float:
+        """
+        Note: won't round the result.
+        Roundings are done only over the final intervals to avoid precision errors.
+        """
+        return np.rad2deg(rad) / 2
+
+    @cached_property
+    def hue_avg_rads(self):
+        return circular_mean(self.hues_rads)
+
+    @cached_property
+    def hues_rads(self):
+        hues_degs = self.samples[:, 0].astype(float) * 2  # turn to 360 degrees
+        hues_rads = [np.deg2rad(h) for h in hues_degs]
+        return hues_rads
+
+    @cached_property
+    def h_std_dev(self):
+        hue_circ_stddev = circular_stdev(self.hues_rads)
+        return self.rad2hue(hue_circ_stddev)
+
+    @cached_property
+    def s_std_dev(self):
+        from statistics import stdev
+        return stdev(self.samples[:, 1][0], self.s_avg)
+
+    @cached_property
+    def v_std_dev(self):
+        from statistics import stdev
+        return stdev(self.samples[:, 2], self.v_avg)
+
+    @cached_property
+    def h_max_dev(self):
+        from math import pi
+        max_deviation_hue = max([min(abs(pi * 2 - abs(self.hue_avg_rads - a)),
+                                     abs(self.hue_avg_rads - a))
+                                 for a in self.hues_rads])
+        return self.rad2hue(max_deviation_hue)
+
+    @cached_property
+    def s_max_dev(self):
+        return np.max(np.abs(self.samples[:, 1] - self.s_avg))
+
+    @cached_property
+    def v_max_dev(self):
+        return np.max(np.abs(self.samples[:, 2] - self.v_avg))
+
+    @cached_property
+    def h_mode(self):
+        from scipy import stats as st
+        return st.mode(self.samples[:, 0])[0]
+
+    @cached_property
+    def s_mode(self):
+        from scipy import stats as st
+        return st.mode(self.samples[:, 1])[0]
+
+    @cached_property
+    def v_mode(self):
+        from scipy import stats as st
+        return st.mode(self.samples[:, 2])[0]
+
+    @cached_property
+    def h_pmedian(self):
+        return pseudo_circ_median(self.h_avg, self.h_mode, 180)
+
+    @cached_property
+    def s_median(self):
+        return np.median(self.samples[:, 1])
+
+    @cached_property
+    def v_median(self):
+        return np.median(self.samples[:, 2])
+
+    @cached_property
+    def h_avg(self):
+        return self.rad2hue(self.hue_avg_rads)
+
+    @cached_property
+    def s_avg(self):
+        return np.mean(self.samples[:, 1])
+
+    @cached_property
+    def v_avg(self):
+        return np.mean(self.samples[:, 2])
+
+    @lru_cache(maxsize=2)
+    def s_quant(self, quantile):
+        return np.quantile(self.samples[:, 1], quantile)
+
+    @lru_cache(maxsize=2)
+    def s_quant2(self, lower, upper):
+        return Interval([self.s_quant(lower), self.s_quant(upper)])
+
+    @lru_cache(maxsize=2)
+    def v_quant(self, quantile):
+        return np.quantile(self.samples[:, 2], quantile)
+
+    @lru_cache(maxsize=2)
+    def v_quant2(self, lower, upper):
+        return Interval([self.v_quant(lower), self.v_quant(upper)])
+
+    @lru_cache(maxsize=2)
+    def h_quant(self, center, quantile):
+        """
+        Args:
+            center: hue center [0, 179]
+            quantile: [0, 1]
+        Returns:
+        """
+        center_rads = np.deg2rad(center * 2)
+        value = circ_quantiles(self.hues_rads, center_rads, [quantile])[0]
+        value = self.rad2hue(value)
+
+        # unfix values (fix in the last step, after all changes are made to the interval)
+        if quantile < 0.5 and value > center:
+            value -= 360
+        if quantile > 0.5 and value < center:
+            value += 360
+
+        return value
+
+    @lru_cache(maxsize=2)
+    def h_quant2(self, center, lower, upper) -> Interval:
+        if lower > 0.5 or upper < 0.5:
+            raise ("Arguments outside of expected range"
+                   "\nexpected: lower <= 0.5 <= higher"
+                   f"\ngot: lower={lower} and higher={upper}")
+
+        center_rads = np.deg2rad(center * 2)
+        bounds = circ_quantiles(self.samples["hues_rad"], center_rads, [lower, upper])
+        bounds = [self.rad2hue(q) for q in bounds]
+
+        # unfix values (fix in the last step, after all changes are made to the interval)
+        if bounds[0] > center:
+            bounds[0] -= 360
+        if bounds[1] < center:
+            bounds[1] += 360
+
+        return Interval(bounds)
+
+    @staticmethod
+    def to_interval(lower, upper):
+        return Interval([lower, upper])
+
+    @staticmethod
+    def minmax(intervals: list[Interval]):
+        return Interval([
+            min(lower[0] for lower in intervals),
+            max(upper[1] for upper in intervals)
+        ])
