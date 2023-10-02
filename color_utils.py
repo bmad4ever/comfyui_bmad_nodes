@@ -362,3 +362,10 @@ class HSV_Samples:
             min(lower[0] for lower in intervals),
             max(upper[1] for upper in intervals)
         ])
+
+    @staticmethod
+    def maxmin(intervals: list[Interval]):
+        return Interval([
+            max(lower[0] for lower in intervals),
+            min(upper[1] for upper in intervals)
+        ])
