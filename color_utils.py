@@ -192,6 +192,16 @@ class Interval:
         bounds[1] += units / 2 if units2 == 0 else units2
         return Interval(bounds)
 
+    def interpolate(self, weight: float, other_interval: list):
+        """
+        Args:
+            weight: [0, 1] 0 = original interval; 1 = other_interval
+            other_interval:
+        """
+        wc = 1 - weight
+        bounds = [self.value[0] * wc + other_interval[0] * weight, self.value[1] * wc + other_interval[1] * weight]
+        return Interval(bounds)
+
 
 class HSV_Samples:
     """
