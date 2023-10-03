@@ -237,7 +237,7 @@ class HSV_Samples:
     @cached_property
     def s_std_dev(self):
         from statistics import stdev
-        return stdev(self.samples[:, 1][0], self.s_avg)
+        return stdev(self.samples[:, 1], self.s_avg)
 
     @cached_property
     def v_std_dev(self):
@@ -348,11 +348,9 @@ class HSV_Samples:
                    "\nexpected: lower <= 0.5 <= higher"
                    f"\ngot: lower={lower} and higher={upper}")
 
-        print(f"center:{self.h_median}")
         center_rads = np.deg2rad(self.h_median * 2)
         bounds = circ_quantiles(self.hues_rads, center_rads, [lower, upper])
         bounds = [self.rad2hue(q) for q in bounds]
-        print(f"bounds:{bounds}")
 
         # unfix values (fix in the last step, after all changes are made to the interval)
         if bounds[0] > self.h_median:
