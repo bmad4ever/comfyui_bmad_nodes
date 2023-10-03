@@ -1,6 +1,7 @@
 import { app } from "/scripts/app.js";
 
 var potentially_dangerous_nodes = [
+    "BuildColorRangeAdvanced (hsv)",
 	"Filter Contour",
 	"AnyToAny"
 ]

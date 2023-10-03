@@ -1338,67 +1338,21 @@ class FindComplementaryColor:
         return (list(color_dict[color]), color,)
 
 
-class EstimateColorIntervalHSV:
-    """
-    if leeway is equal to 1 then the interval is defined considering the max absolute deviation from the samples means
-    if leeway is 2, then the interval is doubled, if set to .5 halved, etc...
-
-    the returned hue_mode indicates if the hue range should be split into two when using InRange,
-    when the hue interval crosses the 0/180 boundary.
-    """
-
-    @staticmethod
-    def double_maxdev_interval(means, hsv_samples, hues_rad, hue_cmean_rad, leeway):
-        from math import pi
-        max_deviation_saturation = np.max(np.abs(hsv_samples[:, :, 1].astype(float) - means[1]))
-        max_deviation_value = np.max(np.abs(hsv_samples[:, :, 2].astype(float) - means[2]))
-        max_deviation_hue = max([min(abs(pi * 2 - abs(hue_cmean_rad - a)), abs(hue_cmean_rad - a)) for a in hues_rad])
-        max_deviation_hue = np.rad2deg(max_deviation_hue) / 2  # from a [0, 2pi] world to [0, 180[ again
-        return np.array([max_deviation_hue, max_deviation_saturation, max_deviation_value])*leeway
-
-    @staticmethod
-    def stdev(means, hsv_samples, hues_rad, hue_cmean_rad, leeway):
-        from statistics import stdev
-        stddev_saturation = stdev(hsv_samples[:, :, 1][0], means[1])
-        stddev_value = stdev(hsv_samples[:, :, 2][0], means[2])
-        hue_circ_stddev = circular_stdev(hues_rad)
-        hue_stddev = np.rad2deg(hue_circ_stddev) / 2  # from a [0, 2pi] world to [0, 180[ again
-        return np.array([hue_stddev, stddev_saturation, stddev_value])*leeway
-
-    @staticmethod
-    def leeway_only(means, hsv_samples, hues_rad, hue_cmean_rad, leeway):
-        saturation = leeway
-        value = leeway
-        hue = leeway*180/255  # scale according to the hue range
-        return np.array([hue, saturation, value])
-
-
-    interval_modes_map = {
-        "2xStdDev * leeway": stdev,
-        "2xMaxDev * leeway": double_maxdev_interval,
-        "mean +- leeway": leeway_only,
-    }
-    interval_modes = list(interval_modes_map.keys())
-
-    # TODO Individual leeways.
-    #  if I know apriori that hue won't change, set it to only leeway, but use stddev for value, for example.
-
+class SampleColorHSV:
     @classmethod
     def INPUT_TYPES(s):
         import sys
         return {"required": {
             "rgb_image": ("IMAGE",),
             "sample_size": ("INT", {"default": 1000, "min": 1, "max": 256 * 256, }),
-            "leeway": ("FLOAT", {"default": 3, "min": 0.1, "max": 100, "step": 0.05}),
-            "interval_mode": (s.interval_modes, s.interval_modes[0]),
             "sampling_seed": ("INT", {"default": 0, "min": 0, "max": sys.maxsize, "step": 1})
         }}
 
-    RETURN_TYPES = ("HSV_COLOR", "HSV_COLOR", "HSV_COLOR", InRangeHSV.hue_modes)   # TODO fix last output name (prob. via js)
-    FUNCTION = "estimate"
+    RETURN_TYPES = ("HSV_SAMPLES", )
+    FUNCTION = "sample"
     CATEGORY = "Bmad/CV/Color A."
 
-    def estimate(self, rgb_image, sample_size, leeway, interval_mode, sampling_seed):
+    def sample(self, rgb_image, sample_size, sampling_seed):
         image = tensor2opencv(rgb_image, 3)
         image_width = image.shape[1]
 
@@ -1410,47 +1364,8 @@ class EstimateColorIntervalHSV:
 
         # only convert samples to HSV
         sample_pixels_hsv = cv.cvtColor(sample_pixels, cv.COLOR_RGB2HSV)
-
-        # Calculate mean for each channel
-        # note: hue requires circular mean
-        hues_degs = sample_pixels_hsv[0, :, 0].astype(float) * 2  # turn to 360 degrees
-        hues_rads = [math.radians(h) for h in hues_degs]
-        hue_cmean_rad = circular_mean(angles_in_rads=hues_rads)
-        mean_saturation = np.mean(sample_pixels_hsv[0, :, 1])
-        mean_value = np.mean(sample_pixels_hsv[0, :, 2])
-        means = np.array([math.degrees(hue_cmean_rad)/2, mean_saturation, mean_value])
-
-        # Compute interval for the selected interval mode
-        half_interval = self.interval_modes_map[interval_mode](
-            means, sample_pixels_hsv, hues_rads, hue_cmean_rad, leeway)
-
-        # hsv bounds
-        lower = means - half_interval
-        upper = means + half_interval
-
-        # force hue bounds if interval > 90
-        if half_interval[0] >= 90:
-            lower[0] = 0
-            upper[0] = 179  # note: return a color that exists, thus 179
-
-        # check if hue needs to be split into 2 intervals when using inRange
-        # note: 180 means zero is included, a one value split
-        hue_mode = InRangeHSV.HUE_MODE_SPLIT\
-            if lower[0] < 0 or upper[0] >= 180\
-            else InRangeHSV.HUE_MODE_SINGLE
-
-        # correct hue bounds to [0, 180[
-        lower[0] = (lower[0] + 180) % 180
-        upper[0] = upper[0] % 180
-
-        # clamp saturation and value limits to return actual colors in the outputs
-        lower[1] = max(lower[1], 0)
-        lower[2] = max(lower[2], 0)
-        upper[1] = min(upper[1], 255)
-        upper[2] = min(upper[2], 255)
-
-        ret = (upper.round(), lower.round(), means.round(), hue_mode)
-        return ret
+        samples_object = HSV_Samples(sample_pixels_hsv[0, :, :])
+        return (samples_object, )
 
 
 class ColorToHSVColor:
@@ -1484,7 +1399,7 @@ class KMeansColor:
             "eps": ("FLOAT", {"default": .2, "step": 0.05})
         }}
 
-    RETURN_TYPES = ("IMAGE", )
+    RETURN_TYPES = ("IMAGE",)
     FUNCTION = "get_dominant_colors"
     CATEGORY = "Bmad/CV/Color A."
 
@@ -1502,9 +1417,162 @@ class KMeansColor:
         res = center[labels.flatten()]
         res2 = res.reshape((image.shape))
         res2 = opencv2tensor(res2)
-        return (res2, )
+        return (res2,)
+
+
+class BuildColorRangeHSV:
+    @staticmethod
+    def percentile(samples: HSV_Samples, percentage):
+        value = percentage / 100 / 2
+        bounds = {}
+        bounds["h"] = samples.h_quant2(.5 - value, .5 + value)
+        bounds["s"] = samples.s_quant2(.5 - value, .5 + value)
+        bounds["v"] = samples.v_quant2(.5 - value, .5 + value)
+        return bounds
+
+    @staticmethod
+    def avg_3maxdev(samples: HSV_Samples, percentage):
+        value = percentage / 100
+        bounds = {}
+        bounds["h"] = [samples.h_avg - samples.h_max_dev * 3 * value, samples.h_avg + samples.h_max_dev * 3 * value]
+        bounds["s"] = [samples.s_avg - samples.s_max_dev * 3 * value, samples.s_avg + samples.s_max_dev * 3 * value]
+        bounds["v"] = [samples.v_avg - samples.v_max_dev * 3 * value, samples.v_avg + samples.v_max_dev * 3 * value]
+        return bounds
+
+    @staticmethod
+    def avg_2stddev(samples: HSV_Samples, percentage):
+        value = percentage / 100
+        bounds = {}
+        bounds["h"] = [samples.h_avg - samples.h_std_dev * 2 * value, samples.h_avg + samples.h_std_dev * 2 * value]
+        bounds["s"] = [samples.s_avg - samples.s_std_dev * 2 * value, samples.s_avg + samples.s_std_dev * 2 * value]
+        bounds["v"] = [samples.v_avg - samples.v_std_dev * 2 * value, samples.v_avg + samples.v_std_dev * 2 * value]
+        return bounds
+
+    @staticmethod
+    def median_interpolate(samples: HSV_Samples, percentage):
+        value = percentage / 100
+        bounds = {}
+        bounds["h"] = Interval([samples.h_median, samples.h_median]).interpolate(value, [0, 179])
+        bounds["s"] = Interval([samples.s_median, samples.s_median]).interpolate(value, [0, 255])
+        bounds["v"] = Interval([samples.v_median, samples.v_median]).interpolate(value, [0, 255])
+        return bounds
+
+    interval_modes_map = {
+        "median to extremes interpolation": median_interpolate,
+        "average +- 3x max deviation": avg_3maxdev,
+        "average +- 2x standard deviation": avg_2stddev,
+        "sample percentage centered at median": percentile,
+    }
+    interval_modes = list(interval_modes_map.keys())
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "samples": ("HSV_SAMPLES",),
+            "percentage_modifier": ("INT", {"default": 50, "min": 1, "max": 100}),
+            "interval_type": (s.interval_modes, s.interval_modes[0]),
+        }}
+
+    RETURN_TYPES = ("HSV_COLOR", "HSV_COLOR", InRangeHSV.hue_modes)
+    FUNCTION = "get_interval"
+    CATEGORY = "Bmad/CV/Color A."
+
+    def get_interval(self, samples, percentage_modifier, interval_type):
+        bounds = self.interval_modes_map[interval_type](samples, percentage_modifier)
+        lower_bounds = np.array([bounds.get("h")[0], bounds.get("s")[0], bounds.get("v")[0]]).round()
+        upper_bounds = np.array([bounds.get("h")[1], bounds.get("s")[1], bounds.get("v")[1]]).round()
+        hue_mode = BuildColorRangeHSV.fix_bounds(lower_bounds, upper_bounds)
+        return (upper_bounds, lower_bounds, hue_mode)
+
+    @staticmethod
+    def fix_bounds(lower_bounds, upper_bounds):
+        # force hue bounds if interval >= 180
+        interval_contains_zero = lower_bounds[0] <= 0  # example case: [-2, 2] includes the zero, but diff = 4
+        if upper_bounds[0] - lower_bounds[0] >= (179 if interval_contains_zero else 180):
+            lower_bounds[0] = 0
+            upper_bounds[0] = 179  # note: return a color that exists, thus 179
+        # check if hue needs to be split into 2 intervals when using inRange
+        # note: 180 means zero is included, a one value split
+        hue_mode = InRangeHSV.HUE_MODE_SPLIT \
+            if lower_bounds[0] < 0 or upper_bounds[0] >= 180 \
+            else InRangeHSV.HUE_MODE_SINGLE
+        # correct hue bounds to [0, 180[
+        lower_bounds[0] = (lower_bounds[0] + 180) % 180
+        upper_bounds[0] = upper_bounds[0] % 180
+        # clamp saturation and value limits to return actual colors in the outputs
+        lower_bounds[1] = max(lower_bounds[1], 0)
+        lower_bounds[2] = max(lower_bounds[2], 0)
+        upper_bounds[1] = min(upper_bounds[1], 255)
+        upper_bounds[2] = min(upper_bounds[2], 255)
+        return hue_mode
+
+
+class BuildColorRangeHSVAdvanced:
+    def __init__(self):
+        self.samples = None
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            # "average": ("HSV_COLOR",), # compute from sample?
+            "samples": ("HSV_SAMPLES",),
+            "hue_exp": ("STRING", {"multiline": True, "default": s.default_hue_expression}),
+            "sat_exp": ("STRING", {"multiline": True, "default": s.default_saturation_expression}),
+            "val_exp": ("STRING", {"multiline": True, "default": s.default_value_expression}),
+        }}
+
+    RETURN_TYPES = ("HSV_COLOR", "HSV_COLOR", InRangeHSV.hue_modes)
+    FUNCTION = "get_interval"
+    CATEGORY = "Bmad/CV/Color A."
+
+    default_hue_expression = """# hue
+quant2(0, 1).scale_by_constant(16) if 2 < v_median < 253 else to_interval(0, 180)
+    """
+    default_saturation_expression = """# saturation
+to_interval(5, 255) if 2 < v_median < 253 else s_quant2(0,1).interpolate(0.2, [0, 255])
+    """
+    default_value_expression = """# value
+v_quant2(0,1).interpolate(.5, [0, 255]).scale_by_constant(50) if 2 < v_median < 253 else v_quant2(0,1).scale_by_constant(8)
+    """
+
+    def get_interval(self, samples, hue_exp, sat_exp, val_exp):
+        self.samples = samples
+
+        # function to get sample names to include (avoids pre computing everything)
+        # this supposes some computations could take considerable time, thus avoiding them if not used
+        def valid_token(token: str):
+            return token in samples_names and (
+                    token.startswith("h_") or token.startswith("s_") or token.startswith("v_") or
+                    token == "to_interval" or token == "minmax" or token == "maxmin"
+            )
+
+        # get bounds from the eval expressions
+        bounds = {}
+        samples_names = dir(samples)
+        for key, expression in {"h": hue_exp, "s": sat_exp, "v": val_exp}.items():
+            expression = prepare_text_for_eval(expression)  # purge potentially dangerous tokens
+
+            locals_to_include_names = filter_expression_names(valid_token, expression)
+            locals_to_include = {
+                name: getattr(samples, name)
+                for name in locals_to_include_names
+            }
+
+            bounds[key] = eval(expression, {
+                "__builtins__": {},
+                'min': min, 'max': max, 'm': math,
+                **locals_to_include
+            }, {})
+
+        # get 2 colors that represent the computed lower and upper bounds
+        lower_bounds = np.array([bounds.get("h")[0], bounds.get("s")[0], bounds.get("v")[0]]).round()
+        upper_bounds = np.array([bounds.get("h")[1], bounds.get("s")[1], bounds.get("v")[1]]).round()
+        hue_mode = BuildColorRangeHSV.fix_bounds(lower_bounds, upper_bounds)
+        return (upper_bounds, lower_bounds, hue_mode)
+
 
 # endregion
+
 
 NODE_CLASS_MAPPINGS = {
     "ConvertImg": ConvertImg,
@@ -1539,7 +1607,9 @@ NODE_CLASS_MAPPINGS = {
 
     "ColorDictionary": ColorDefaultDictionary,
     "FindComplementaryColor": FindComplementaryColor,
-    "EstimateColorInterval (hsv)": EstimateColorIntervalHSV,
     "KMeansColor": KMeansColor,
-    "RGB to HSV": ColorToHSVColor
+    "RGB to HSV": ColorToHSVColor,
+    "SampleColorHSV": SampleColorHSV,
+    "BuildColorRangeHSV (hsv)": BuildColorRangeHSV,
+    "BuildColorRangeAdvanced (hsv)": BuildColorRangeHSVAdvanced,
 }
