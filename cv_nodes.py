@@ -89,6 +89,35 @@ class ConvertImg:
         return (opencv2tensor(image),)
 
 
+class AddAlpha:
+    method = ["default", "invert"]
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "rgb_image": ("IMAGE",),
+            },
+            "optional": {
+                "alpha": ("IMAGE",),
+                "method": (s.method, {"default": s.method[0]}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "add_alpha"
+    CATEGORY = "Bmad/image"
+
+    def add_alpha(self, rgb_image, alpha=None, method=None):
+        rgb_image = tensor2opencv(rgb_image, 3)
+        rgba = cv.cvtColor(rgb_image, cv.COLOR_RGB2RGBA)
+        if alpha is not None:
+            alpha = tensor2opencv(alpha, 1)
+            rgba[:, :, 3] = alpha if method == self.method[0] else 255 - alpha
+        rgba = opencv2tensor(rgba)
+        return (rgba,)
+
+
 # endregion
 
 
@@ -1577,6 +1606,7 @@ v_quant2(0,1).interpolate(.5, [0, 255]).scale_by_constant(50) if 2 < v_median < 
 NODE_CLASS_MAPPINGS = {
     "ConvertImg": ConvertImg,
     "CopyMakeBorder": CopyMakeBorderSimple,
+    "AddAlpha": AddAlpha,
 
     "Framed Mask Grab Cut": FramedMaskGrabCut,
     "Framed Mask Grab Cut 2": FramedMaskGrabCut2,
