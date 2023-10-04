@@ -1526,7 +1526,7 @@ class BuildColorRangeHSVAdvanced:
     CATEGORY = "Bmad/CV/Color A."
 
     default_hue_expression = """# hue
-quant2(0, 1).scale_by_constant(16) if 2 < v_median < 253 else to_interval(0, 180)
+h_quant2(0, 1).scale_by_constant(16) if 2 < v_median < 253 else to_interval(0, 180)
     """
     default_saturation_expression = """# saturation
 to_interval(5, 255) if 2 < v_median < 253 else s_quant2(0,1).interpolate(0.2, [0, 255])
