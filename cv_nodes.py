@@ -1,5 +1,7 @@
 import math
 import cv2 as cv
+import numpy as np
+
 from .dry import *
 from .color_utils import *
 
@@ -116,6 +118,61 @@ class AddAlpha:
             rgba[:, :, 3] = alpha if method == self.method[0] else 255 - alpha
         rgba = opencv2tensor(rgba)
         return (rgba,)
+
+
+class FadeMaskEdges:
+    """
+    The original intent is to premultiply and alpha blend a subject's edges to avoid outer pixels creeping in.
+
+    A very slight blur near the edges afterwards when using paste_original_blacks and low tightness may be required,
+     but this should be done after premultiplying and setting the alpha.
+
+    Stylized subject's, such as drawings with black outlines, may benefit from using different 2 edge fades:
+        1. a fade with higher edge size for the premultiplication, fading the subject into blackness
+        2. a tighter fade for the alpha
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "binary_image": ("IMAGE",),
+                "edge_size": ("FLOAT", {"default": 5.0, "min": 1.0, "step": 1.0}),
+                # how quick does it fade to black
+                "edge_tightness": ("FLOAT", {"default": 1.1, "min": 1.0, "max": 10.0, "step": 0.05}),
+                # how does it fade, may be used to weaken small lines; 1 = linear transition
+                "edge_exponent": ("FLOAT", {"default": 1, "min": 0.1, "max": 10.0, "step": 0.1}),
+                "smoothing_diameter": ("INT", {"default": 10, "min": 2, "max": 256, "step": 1}),
+                "paste_original_blacks": ("BOOLEAN", {"default": True})
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "apply"
+    CATEGORY = "Bmad/CV"
+
+    def apply(self, binary_image, edge_size, edge_tightness, edge_exponent, smoothing_diameter, paste_original_blacks):
+        binary_image = tensor2opencv(binary_image, 1)
+        # _, binary_image = cv.threshold(gray_image, 128, 255, cv.THRESH_BINARY) # suppose it's already binary
+
+        # compute L2 (euclidean) distance -> normalize with respect to edge size -> smooth
+        distance_transform = cv.distanceTransform(binary_image, cv.DIST_L2, cv.DIST_MASK_3)
+        normalized_distance = distance_transform / edge_size
+        smoothed_distance = cv.bilateralFilter(normalized_distance, smoothing_diameter, 75, 75)
+
+        # darken the white pixels based on smoothed distance and "edge tightness"
+        diff = 1 - smoothed_distance
+        darkened_image = (abs(diff*edge_tightness) ** (1/edge_exponent)) * np.sign(diff)
+        darkened_image = np.clip(darkened_image, 0, 1)
+        darkened_image = (darkened_image * 255).astype(np.uint8)
+
+        if paste_original_blacks:  # mask original black pixels
+            black_mask = binary_image < 1
+            darkened_image[black_mask] = 0
+
+        output_image = binary_image - darkened_image  # darken original image
+        output_image = opencv2tensor(output_image)
+        return (output_image, )
 
 
 # endregion
@@ -1219,6 +1276,45 @@ class InRangeHSV:
         return (thresh,)
 
 
+class DistanceTransform:
+    distance_types_map = {
+        "DIST_L2": cv.DIST_L2,
+        "DIST_L1": cv.DIST_L1,
+        "DIST_C": cv.DIST_C,
+    }
+    distance_types = list(distance_types_map.keys())
+
+    mask_sizes_map = {
+        "DIST_MASK_3": cv.DIST_MASK_3,
+        "DIST_MASK_5": cv.DIST_MASK_5,
+        "DIST_MASK_PRECISE": cv.DIST_MASK_PRECISE
+    }
+    mask_sizes = list(mask_sizes_map.keys())
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "binary_image": ("IMAGE",),
+                "distance_type": (s.distance_types, {"default": s.distance_types[0]}),
+                "mask_size": (s.mask_sizes, {"default": s.mask_sizes[0]}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "apply"
+    CATEGORY = "Bmad/CV/Thresholding"
+
+    def apply(self, binary_image, distance_type, mask_size):
+        binary_image = tensor2opencv(binary_image, 1)
+        distance_transform = cv.distanceTransform(
+            binary_image,
+            self.distance_types_map[distance_type],
+            self.mask_sizes_map[mask_size])
+        distance_transform = opencv2tensor(distance_transform)
+        return (distance_transform, )
+
+
 # TODO maybe add GainDivision
 
 # endregion
@@ -1607,6 +1703,7 @@ NODE_CLASS_MAPPINGS = {
     "ConvertImg": ConvertImg,
     "CopyMakeBorder": CopyMakeBorderSimple,
     "AddAlpha": AddAlpha,
+    "FadeMaskEdges": FadeMaskEdges,
 
     "Framed Mask Grab Cut": FramedMaskGrabCut,
     "Framed Mask Grab Cut 2": FramedMaskGrabCut2,
@@ -1630,6 +1727,7 @@ NODE_CLASS_MAPPINGS = {
     "CLAHE": CLAHE,
     "FindThreshold": FindThreshold,
     "InRange (hsv)": InRangeHSV,
+    "DistanceTransform": DistanceTransform,
     # note: invert already exist: should be named ImageInvert, unless "overwritten" by some other custom node
 
     "MorphologicOperation": MorphologicOperation,
