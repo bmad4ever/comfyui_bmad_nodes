@@ -957,6 +957,9 @@ class ChameleonMask:  # wtf would I name this node as?
         dst = self.mode_func_map[mode](dst)
         diff = cv.absdiff(src, dst)
 
+        if mode == "HUE":
+            diff = np.minimum(diff, 180 - diff)
+
         # binary thresholding
         # _, mask = cv.threshold(diff, threshold, 255, cv.THRESH_BINARY)
         diff = cv.GaussianBlur(diff, (thresh_blur, thresh_blur), 0)
