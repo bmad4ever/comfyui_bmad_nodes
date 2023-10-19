@@ -1,4 +1,4 @@
-### ComfyUI-Bmad-Custom-Nodes
+### ComfyUI Bmad Nodes
 
 Miscellaneous assortment of custom nodes for [ComfyUI](https://github.com/comfyanonymous/ComfyUI).
 
