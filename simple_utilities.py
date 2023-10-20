@@ -720,9 +720,26 @@ class ColorRGBFromHex:
         return (hex, )
 
 
+class ImageBatchToImageList:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"images": ("IMAGE", )}}
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "to_list"
+    CATEGORY = "Bmad/image"
+    OUTPUT_IS_LIST = (True,)
+
+    def to_list(self, images):
+        image_list = [images[i][None, ...] for i in range(images.shape[0])]
+        return (image_list, )
+
+
+
 NODE_CLASS_MAPPINGS = {
     "String": StringNode,
     "Add String To Many": AddString2Many,
+    "ImageBatchToImageList": ImageBatchToImageList,
 
     "Color (RGB)": ColorRGB,
     "Color (hexadecimal)": ColorRGBFromHex,
