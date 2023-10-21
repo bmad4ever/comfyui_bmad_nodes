@@ -325,7 +325,6 @@ class HSV_Samples:
     def h_quant(self, quantile):
         """
         Args:
-            center: hue center [0, 179]
             quantile: [0, 1]
         Returns:
         """

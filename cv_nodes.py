@@ -1206,22 +1206,22 @@ class InRangeHSV:
     @staticmethod
     def hue_ignore(image, color_a, color_b):
         ls, us, lv, uv = InRangeHSV.get_saturation_and_value_bounds(color_a, color_b)
-        return cv.inRange(image, (0, ls, lv), (179, us, uv))
+        return cv.inRange(image, np.array((0, ls, lv)), np.array((179, us, uv)))
 
     @staticmethod
     def hue_single(image, color_a, color_b):
         ls, us, lv, uv = InRangeHSV.get_saturation_and_value_bounds(color_a, color_b)
         lh = min(color_a[0], color_b[0])
         uh = max(color_a[0], color_b[0])
-        return cv.inRange(image, (lh, ls, lv), (uh, us, uv))
+        return cv.inRange(image, np.array((lh, ls, lv)), np.array((uh, us, uv)))
 
     @staticmethod
     def hue_split(image, color_a, color_b):
         ls, us, lv, uv = InRangeHSV.get_saturation_and_value_bounds(color_a, color_b)
         lh = min(color_a[0], color_b[0])
         uh = max(color_a[0], color_b[0])
-        thresh_1 = cv.inRange(image, (0, ls, lv), (lh, us, uv))
-        thresh_2 = cv.inRange(image, (uh, ls, lv), (179, us, uv))
+        thresh_1 = cv.inRange(image, np.array((0, ls, lv)), np.array((lh, us, uv)))
+        thresh_2 = cv.inRange(image, np.array((uh, ls, lv)), np.array((179, us, uv)))
         return cv.bitwise_or(thresh_1, thresh_2)
 
     LARGEST_HUE_INTERVAL = False
