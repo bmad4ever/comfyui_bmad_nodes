@@ -1026,13 +1026,12 @@ class OtsuThreshold:
                     "max": 200,
                     "step": 2
                 }),
-                "gaussian_border_type": (border_types, {"default": "BORDER_REPLICATE"}),
+                "gaussian_border_type": (border_types, {"default": border_types[0]}),
             },
         }
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "otsu_thresthold"
-
     CATEGORY = "Bmad/CV/Thresholding"
 
     def otsu_thresthold(self, image, threshold_type, gaussian_blur_x, gaussian_blur_y, gaussian_border_type):
