@@ -2,10 +2,13 @@ import { app } from "/scripts/app.js";
 
 var mi_node_types = {
     "VAEEncodeBatch": "IMAGE",
-    "CondList": "CONDITIONING",
     "CondList (string) Advanced": "CONDITIONING",
     "CLIPEncodeMultipleAdvanced": "STRING",
-    "ControlNetHadamard (manual)": "IMAGE"
+    "ControlNetHadamard (manual)": "IMAGE",
+
+    "ToImageList": "IMAGE",
+    "ToLatentList": "LATENT",
+    "ToCondList": "CONDITIONING",
 }
 
 

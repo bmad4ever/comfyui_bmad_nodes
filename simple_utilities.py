@@ -1,4 +1,6 @@
 import math
+from abc import ABC
+
 import nodes
 from .dry import *
 from .color_utils import ColorClip, color255_INPUT
@@ -17,7 +19,7 @@ class StringNode:
         return (inStr,)
 
 
-class ColorClip(ColorClip):
+class ColorClipSimple(ColorClip):
     @classmethod
     def INPUT_TYPES(s):
         return super().get_types(advanced=False)
@@ -560,28 +562,6 @@ class MergeLatentsBatchGridwise:
 
 # region cond lists
 
-class CondList:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "inputs_len": ("INT", {"default": 9, "min": 0, "max": 32}),
-            # accept only 1, there may be workflows that change the number of conds to gen depending on inputs
-            # would 0 also be acceptable? e.g. to concat or combine, maybe the list is empty cause is not applicable?
-            # hmmmmmm... will place a zero and once I have something to test I can decide
-        }}
-    RETURN_TYPES = ("CONDITIONING", )
-    FUNCTION = "gen"
-    CATEGORY = "Bmad/conditioning"
-    OUTPUT_IS_LIST = (True,)
-
-    def gen(self, inputs_len, **kwargs):
-        cond_list=[]
-        for i in range(inputs_len):
-            arg_name = get_arg_name_from_multiple_inputs("conditioning", i)
-            cond_list.append(kwargs[arg_name])
-        return (cond_list,)
-
-
 class CLIPEncodeMultiple(nodes.CLIPTextEncode):
     @classmethod
     def INPUT_TYPES(s):
@@ -657,7 +637,6 @@ class ControlNetHadamardManual(ControlNetHadamard):
             images.append(kwargs[arg_name][0])
         return super().apply(conds, control_net, images, strength)
 
-
 # endregion cond lists workflow
 
 
@@ -720,7 +699,7 @@ class ColorRGBFromHex:
         return (hex, )
 
 
-class ImageBatchToImageList:
+class ImageBatchToList:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {"images": ("IMAGE", )}}
@@ -735,15 +714,86 @@ class ImageBatchToImageList:
         return (image_list, )
 
 
+# region  get items from list
+
+class UnMakeListMeta(type):
+    def __new__(cls, name, bases, attrs):
+        if 'RETURN_TYPES' not in attrs:
+            attrs['RETURN_TYPES'] = tuple([attrs["TYPE"].upper() for _ in range(32)])
+
+        if 'CATEGORY' not in attrs:
+            attrs['CATEGORY'] = (f'Bmad/{attrs["TYPE"].lower()}', )
+
+        attrs['FUNCTION'] = 'get_all'
+        attrs['INPUT_IS_LIST'] = True
+
+        def get_all(self, list):
+            return tuple(list)
+
+        def INPUT_TYPES(cls):
+            return {
+                "required": {
+                    "list": (attrs["TYPE"].upper(),)
+                }
+            }
+        attrs['get_all'] = get_all
+        attrs['INPUT_TYPES'] = classmethod(INPUT_TYPES)
+
+        return super().__new__(cls, name, bases, attrs)
+
+
+class FromListGetImages(metaclass=UnMakeListMeta):  TYPE = "IMAGE"
+class FromListGetLatents(metaclass=UnMakeListMeta):  TYPE = "LATENT"
+class FromListGetConds(metaclass=UnMakeListMeta):  TYPE = "CONDITIONING"
+
+# endregion
+
+
+# region create list from multiple single inputs
+
+class MakeListMeta(type):
+    def __new__(cls, name, bases, attrs):
+        if 'RETURN_TYPES' not in attrs:
+            attrs['RETURN_TYPES'] = (attrs["TYPE"].upper(), )
+
+        if 'CATEGORY' not in attrs:
+            attrs['CATEGORY'] = (f'Bmad/{attrs["TYPE"].lower()}', )
+
+        attrs['FUNCTION'] = 'to_list'
+        attrs['OUTPUT_IS_LIST'] = (True,)
+
+        def to_list(self, inputs_len, **kwargs):
+            list = []
+            for i in range(inputs_len):
+                arg_name = get_arg_name_from_multiple_inputs(self.TYPE.lower(), i)
+                list.append(kwargs[arg_name])
+            return (list,)
+
+        def INPUT_TYPES(cls):
+            return {"required": {
+                "inputs_len": ("INT", {"default": 2, "min": 0, "max": 32}),
+            }}
+
+        attrs['to_list'] = to_list
+        attrs['INPUT_TYPES'] = classmethod(INPUT_TYPES)
+
+        return super().__new__(cls, name, bases, attrs)
+
+
+class ToImageList(metaclass=MakeListMeta): TYPE = "IMAGE"
+class ToLatentList(metaclass=MakeListMeta): TYPE = "LATENT"
+class ToCondList(metaclass=MakeListMeta): TYPE = "CONDITIONING"
+
+# endregion
+
 
 NODE_CLASS_MAPPINGS = {
     "String": StringNode,
     "Add String To Many": AddString2Many,
-    "ImageBatchToImageList": ImageBatchToImageList,
 
     "Color (RGB)": ColorRGB,
     "Color (hexadecimal)": ColorRGBFromHex,
-    "Color Clip": ColorClip,
+    "Color Clip": ColorClipSimple,
     "Color Clip (advanced)": ColorClipAdvanced,
     "MonoMerge": MonoMerge,
 
@@ -764,10 +814,18 @@ NODE_CLASS_MAPPINGS = {
     "MaskGrid N KSamplers Advanced": MaskGridNKSamplersAdvanced,
     "Merge Latent Batch Gridwise": MergeLatentsBatchGridwise,
 
-    "CondList": CondList,
     "CLIPEncodeMultiple": CLIPEncodeMultiple,
     "ControlNetHadamard": ControlNetHadamard,
     "ControlNetHadamard (manual)": ControlNetHadamardManual,
 
     "FlatLatentsIntoSingleGrid": FlatLatentsIntoSingleGrid,
+
+    "ImageBatchToList": ImageBatchToList,
+
+    "FromListGetImages": FromListGetImages,
+    "FromListGetConds": FromListGetConds,
+    "FromListGetLatents": FromListGetLatents,
+    "ToImageList": ToImageList,
+    "ToLatentList": ToLatentList,
+    "ToCondList": ToCondList,
 }
