@@ -1,5 +1,5 @@
 from .dry import *
-from .simple_utilities import ConditioningGridCond, CondList
+from .simple_utilities import ConditioningGridCond
 from custom_nodes.ComfyUI_ADV_CLIP_emb.nodes import AdvancedCLIPTextEncode
 
 
