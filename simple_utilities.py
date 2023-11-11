@@ -745,6 +745,7 @@ class UnMakeListMeta(type):
 class FromListGetImages(metaclass=UnMakeListMeta):  TYPE = "IMAGE"
 class FromListGetLatents(metaclass=UnMakeListMeta):  TYPE = "LATENT"
 class FromListGetConds(metaclass=UnMakeListMeta):  TYPE = "CONDITIONING"
+class FromListGetModels(metaclass=UnMakeListMeta):  TYPE = "MODEL"
 
 # endregion
 
@@ -783,6 +784,7 @@ class MakeListMeta(type):
 class ToImageList(metaclass=MakeListMeta): TYPE = "IMAGE"
 class ToLatentList(metaclass=MakeListMeta): TYPE = "LATENT"
 class ToCondList(metaclass=MakeListMeta): TYPE = "CONDITIONING"
+class ToModelList(metaclass=MakeListMeta): TYPE = "MODEL"
 
 # endregion
 
@@ -825,7 +827,9 @@ NODE_CLASS_MAPPINGS = {
     "FromListGetImages": FromListGetImages,
     "FromListGetConds": FromListGetConds,
     "FromListGetLatents": FromListGetLatents,
+    "FromListGetModels": FromListGetModels,
     "ToImageList": ToImageList,
     "ToLatentList": ToLatentList,
     "ToCondList": ToCondList,
+    "ToModelList": ToModelList,
 }
