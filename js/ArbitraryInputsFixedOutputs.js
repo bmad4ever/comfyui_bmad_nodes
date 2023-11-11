@@ -19,8 +19,6 @@ app.registerExtension({
 
         if( !(nodeData.name in mi_node_types) ) return;
 
-        console.log(nodeData.name);
-
         const origOnNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () {
 				const r = origOnNodeCreated ? origOnNodeCreated.apply(this, arguments) : undefined;
