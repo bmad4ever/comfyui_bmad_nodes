@@ -9,6 +9,7 @@ var mi_node_types = {
     "ToImageList": "IMAGE",
     "ToLatentList": "LATENT",
     "ToCondList": "CONDITIONING",
+    "ToModelList": "MODEL",
 }
 
 

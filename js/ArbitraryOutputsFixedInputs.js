@@ -5,6 +5,7 @@ var mo_node_types = {
     "FromListGetImages":  "IMAGE",
     "FromListGetLatents":  "LATENT",
     "FromListGetConds":  "CONDITIONING",
+    "FromListGetModels": "MODEL",
 }
 
 
