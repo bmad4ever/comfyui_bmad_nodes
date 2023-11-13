@@ -163,7 +163,7 @@ rect_modes_map = {
         },
         'center XY + half WH (all floored)': {
             # can't guarantee original bounds if converted previously, will only have even numbers on width/height
-            "toBounds": lambda x, y, half_w, half_h: (x - half_w + 1, y - half_h + 1, x + half_w + 1, y + half_h + 1),
+            "toBounds": lambda x, y, half_w, half_h: (x - half_w, y - half_h, x + half_w + (half_w == 0), y + half_h + (half_h == 0) ),
             "fromBounds": lambda x1, y1, x2, y2: ((x1 + x2) // 2, (y1 + y2) // 2, (x2 - x1) // 2, (y2 - y1) // 2)
         }
     }
