@@ -158,7 +158,7 @@ rect_modes_map = {
             "fromBounds": lambda x1, y1, x2, y2: (x1, y1, x2, y2)
         },
         'center XY (floored) + WH': {
-            "toBounds": lambda x, y, w, h: (x - w // 2 + w & 1, y - h // 2 + h & 1, x + w // 2, y + h // 2),
+            "toBounds": lambda x, y, w, h: (x - w // 2 , y - h // 2, x + w // 2 + (w & 1), y + h // 2 + (h & 1)),
             "fromBounds": lambda x1, y1, x2, y2: ((x1 + x2) // 2, (y1 + y2) // 2, x2 - x1, y2 - y1)
         },
         'center XY + half WH (all floored)': {
