@@ -6,6 +6,8 @@ var mo_node_types = {
     "FromListGetLatents":  "LATENT",
     "FromListGetConds":  "CONDITIONING",
     "FromListGetModels": "MODEL",
+    "FromListGetColors": "COLOR",
+    "FromListGetStrings": "STRING"
 }
 
 

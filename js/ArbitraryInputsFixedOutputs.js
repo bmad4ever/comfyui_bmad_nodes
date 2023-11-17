@@ -10,7 +10,9 @@ var mi_node_types = {
     "ToLatentList": "LATENT",
     "ToCondList": "CONDITIONING",
     "ToModelList": "MODEL",
-}
+    "ToColorList": "COLOR",
+    "ToStringList": "STRING"
+    }
 
 
 app.registerExtension({
@@ -23,7 +25,6 @@ app.registerExtension({
         nodeType.prototype.onNodeCreated = function () {
 				const r = origOnNodeCreated ? origOnNodeCreated.apply(this, arguments) : undefined;
                 this.input_type = mi_node_types[nodeData.name];
-                console.log("??? : " + this.input_type + "   " + nodeData.name);
                 this.var_prefix = this.input_type.toLowerCase() + "_"
 				return r;
 		};

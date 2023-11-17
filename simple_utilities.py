@@ -722,7 +722,7 @@ class UnMakeListMeta(type):
             attrs['RETURN_TYPES'] = tuple([attrs["TYPE"].upper() for _ in range(32)])
 
         if 'CATEGORY' not in attrs:
-            attrs['CATEGORY'] = (f'Bmad/{attrs["TYPE"].lower()}', )
+            attrs['CATEGORY'] = (f'Bmad/Lists', ) 
 
         attrs['FUNCTION'] = 'get_all'
         attrs['INPUT_IS_LIST'] = True
@@ -737,7 +737,9 @@ class UnMakeListMeta(type):
                 }
             }
         attrs['get_all'] = get_all
-        attrs['INPUT_TYPES'] = classmethod(INPUT_TYPES)
+
+        if 'INPUT_TYPES' not in attrs:
+            attrs['INPUT_TYPES'] = classmethod(INPUT_TYPES)
 
         return super().__new__(cls, name, bases, attrs)
 
@@ -746,6 +748,13 @@ class FromListGetImages(metaclass=UnMakeListMeta):  TYPE = "IMAGE"
 class FromListGetLatents(metaclass=UnMakeListMeta):  TYPE = "LATENT"
 class FromListGetConds(metaclass=UnMakeListMeta):  TYPE = "CONDITIONING"
 class FromListGetModels(metaclass=UnMakeListMeta):  TYPE = "MODEL"
+class FromListGetColors(metaclass=UnMakeListMeta):  TYPE = "COLOR"
+class FromListGetStrings(metaclass=UnMakeListMeta):
+    TYPE = "STRING"
+
+    @classmethod
+    def INPUT_TYPES(cls): return {"required": {"list": ("STRING", {"default": ""})}}
+
 
 # endregion
 
@@ -758,7 +767,7 @@ class MakeListMeta(type):
             attrs['RETURN_TYPES'] = (attrs["TYPE"].upper(), )
 
         if 'CATEGORY' not in attrs:
-            attrs['CATEGORY'] = (f'Bmad/{attrs["TYPE"].lower()}', )
+            attrs['CATEGORY'] = (f'Bmad/Lists',)
 
         attrs['FUNCTION'] = 'to_list'
         attrs['OUTPUT_IS_LIST'] = (True,)
@@ -785,6 +794,8 @@ class ToImageList(metaclass=MakeListMeta): TYPE = "IMAGE"
 class ToLatentList(metaclass=MakeListMeta): TYPE = "LATENT"
 class ToCondList(metaclass=MakeListMeta): TYPE = "CONDITIONING"
 class ToModelList(metaclass=MakeListMeta): TYPE = "MODEL"
+class ToColorList(metaclass=MakeListMeta): TYPE = "COLOR"
+class ToStringList(metaclass=MakeListMeta): TYPE = "STRING"
 
 # endregion
 
@@ -828,8 +839,12 @@ NODE_CLASS_MAPPINGS = {
     "FromListGetConds": FromListGetConds,
     "FromListGetLatents": FromListGetLatents,
     "FromListGetModels": FromListGetModels,
+    "FromListGetColors": FromListGetColors,
+    "FromListGetStrings": FromListGetStrings,
     "ToImageList": ToImageList,
     "ToLatentList": ToLatentList,
     "ToCondList": ToCondList,
     "ToModelList": ToModelList,
+    "ToColorList": ToColorList,
+    "ToStringList": ToStringList
 }

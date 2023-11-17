@@ -1433,6 +1433,30 @@ class ColorDefaultDictionary:
         return (dic,)
 
 
+class ColorCustomDictionary:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "color_names": ("STRING", {"default": ""}),
+            "colors": ("COLOR", {"default": ""})
+            }
+        }
+
+    RETURN_TYPES = ("COLOR_DICT",)
+    FUNCTION = "ret"
+    CATEGORY = "Bmad/CV/Color A."
+    INPUT_IS_LIST = True
+
+    def ret(self, color_names, colors):
+        if len(color_names) != len(colors):
+            print_yellow("color_names size is different than colors size!")
+            min_len = min(len(color_names), len(colors))
+            color_names = color_names[0:min_len]
+            colors = colors[0:min_len]
+
+        return (dict(zip(color_names, colors)),)
+
+
 class FindComplementaryColor:
     @classmethod
     def INPUT_TYPES(s):
@@ -1736,6 +1760,7 @@ NODE_CLASS_MAPPINGS = {
     "MorphologicSkeletoning": MorphologicSkeletoning,
 
     "ColorDictionary": ColorDefaultDictionary,
+    "ColorDictionary (custom)": ColorCustomDictionary,
     "FindComplementaryColor": FindComplementaryColor,
     "KMeansColor": KMeansColor,
     "RGB to HSV": ColorToHSVColor,
