@@ -722,7 +722,7 @@ class UnMakeListMeta(type):
             attrs['RETURN_TYPES'] = tuple([attrs["TYPE"].upper() for _ in range(32)])
 
         if 'CATEGORY' not in attrs:
-            attrs['CATEGORY'] = (f'Bmad/Lists', ) 
+            attrs['CATEGORY'] = (f'Bmad/Lists', )
 
         attrs['FUNCTION'] = 'get_all'
         attrs['INPUT_IS_LIST'] = True
@@ -733,7 +733,7 @@ class UnMakeListMeta(type):
         def INPUT_TYPES(cls):
             return {
                 "required": {
-                    "list": (attrs["TYPE"].upper(),)
+                    "list": (attrs["TYPE"].upper(), {"forceInput": True})
                 }
             }
         attrs['get_all'] = get_all
@@ -749,12 +749,7 @@ class FromListGetLatents(metaclass=UnMakeListMeta):  TYPE = "LATENT"
 class FromListGetConds(metaclass=UnMakeListMeta):  TYPE = "CONDITIONING"
 class FromListGetModels(metaclass=UnMakeListMeta):  TYPE = "MODEL"
 class FromListGetColors(metaclass=UnMakeListMeta):  TYPE = "COLOR"
-class FromListGetStrings(metaclass=UnMakeListMeta):
-    TYPE = "STRING"
-
-    @classmethod
-    def INPUT_TYPES(cls): return {"required": {"list": ("STRING", {"default": ""})}}
-
+class FromListGetStrings(metaclass=UnMakeListMeta): TYPE = "STRING"
 
 # endregion
 
