@@ -13,6 +13,7 @@ color255_INPUT = ("INT", {
     "step": 1
 })
 
+color_INPUT = ("COLOR", {"forceInput": True})
 
 def setup_color_to_correct_type(color):
     if color is None:
@@ -39,12 +40,12 @@ class ColorClip:
         operations = self.OPERATION[2:] if advanced else self.OPERATION[0:3]
         types["required"]["target"] = (operations, {"default": operations[0]})
         types["required"]["complement"] = (operations, {"default": operations[1]})
-        types["required"]["color"] = ("COLOR",)
+        types["required"]["color"] = color_INPUT
 
         if advanced:
             types["optional"] = {
-                "color_a": ("COLOR",),
-                "color_b": ("COLOR",)
+                "color_a": color_INPUT,
+                "color_b": color_INPUT
             }
 
         return types

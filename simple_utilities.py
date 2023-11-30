@@ -3,7 +3,7 @@ from abc import ABC
 
 import nodes
 from .dry import *
-from .color_utils import ColorClip, color255_INPUT
+from .color_utils import ColorClip, color255_INPUT, color_INPUT
 
 
 class StringNode:
