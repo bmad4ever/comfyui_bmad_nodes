@@ -203,6 +203,10 @@ class Interval:
         bounds = [self.value[0] * wc + other_interval[0] * weight, self.value[1] * wc + other_interval[1] * weight]
         return Interval(bounds)
 
+    def clamp(self, lower, upper):
+        bounds = HSV_Samples.maxmin([self.value, HSV_Samples.to_interval(lower, upper)]).value
+        return Interval(bounds)
+
 
 class HSV_Samples:
     """

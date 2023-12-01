@@ -649,6 +649,10 @@ class FilterContour:
         import cv2
         import numpy
 
+        if len(contours) == 0:
+            print("Contour list is empty")
+            return (contours, )
+
         fitness = fitness[0]
         select = select[0]
 
