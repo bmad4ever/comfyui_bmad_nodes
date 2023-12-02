@@ -498,10 +498,10 @@ class Contours:
             },
         }
 
-    RETURN_TYPES = ("CV_CONTOUR", "CV_CONTOURS_HIERARCHY")
+    RETURN_TYPES = ("CV_CONTOURS", "CV_CONTOUR", "CV_CONTOURS_HIERARCHY")
     FUNCTION = "find_contours"
     CATEGORY = "Bmad/CV/Contour"
-    OUTPUT_IS_LIST = (True, False)
+    OUTPUT_IS_LIST = (False, True, False)
 
     def find_contours(self, image, retrieval_mode, approximation_mode):
         image = tensor2opencv(image)
@@ -510,10 +510,12 @@ class Contours:
         # no thresh applied here, non zeroes are treated as 1 according to documentation;
         # thresh should have been already applied to the image, before passing it to this node.
 
-        return cv.findContours(
+        contours, hierarchy = cv.findContours(
             thresh,
             self.retrieval_modes_map[retrieval_mode],
             self.approximation_modes_map[approximation_mode])
+
+        return (contours, contours, hierarchy, )
 
 
 class DrawContours:
@@ -522,7 +524,7 @@ class DrawContours:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "contours": ("CV_CONTOUR",),
+                "contours": ("CV_CONTOURS",),
                 "index_to_draw": ("INT", {
                     "default": -1,
                     "min": -1,
@@ -543,13 +545,8 @@ class DrawContours:
     FUNCTION = "draw"
 
     CATEGORY = "Bmad/CV/Contour"
-    INPUT_IS_LIST = True
 
     def draw(self, image, contours, index_to_draw, color, thickness):
-        image = image[0]
-        index_to_draw = index_to_draw[0]
-        color = color[0]
-        thickness = thickness[0]
 
         background = tensor2opencv(image)
 
@@ -567,7 +564,7 @@ class GetContourFromList:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "contours": ("CV_CONTOUR",),
+                "contours": ("CV_CONTOURS",),
                 "index": ("INT", {"default": 0, "min": 0, "step": 1})
             }
         }
@@ -575,10 +572,8 @@ class GetContourFromList:
     RETURN_TYPES = ("CV_CONTOUR",)
     FUNCTION = "get_contour"
     CATEGORY = "Bmad/CV/Contour"
-    INPUT_IS_LIST = True
 
     def get_contour(self, contours, index):
-        index = index[0]
         if index >= len(contours):
             return (None,)
         return (contours[index],)
@@ -611,7 +606,8 @@ class ContourGetBoundingRect:
 
 
 class FilterContour:
-    def MODE(self, cnts, fit):
+    @staticmethod
+    def MODE(cnts, fit):
         sorted_list = sorted(cnts, key=fit)
         return [sorted_list[len(sorted_list) // 2]]
 
@@ -619,7 +615,7 @@ class FilterContour:
         "MAX": lambda cnts, fit: [sorted(cnts, key=fit)[-1]],
         "MIN": lambda cnts, fit: [sorted(cnts, key=fit)[0]],
         "MODE": MODE,
-        "FILTER": lambda cnts, fit: filter(fit, cnts),
+        "FILTER": lambda cnts, fit: list(filter(fit, cnts)),
     }
     return_modes = list(return_modes_map.keys())
 
@@ -627,7 +623,7 @@ class FilterContour:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "contours": ("CV_CONTOUR",),
+                "contours": ("CV_CONTOURS",),
                 "fitness": ("STRING", {"multiline": True, "default":
                     "# Contour Fitness Function\n"}),
                 "select": (s.return_modes, {"default": s.return_modes[0]})
@@ -638,11 +634,9 @@ class FilterContour:
             }
         }
 
-    RETURN_TYPES = ("CV_CONTOUR",)
+    RETURN_TYPES = ("CV_CONTOUR", "CV_CONTOURS")
     FUNCTION = "filter"
     CATEGORY = "Bmad/CV/Contour"
-    INPUT_IS_LIST = True
-    OUTPUT_IS_LIST = (True,)
 
     def filter(self, contours, fitness, select, image=None, aux_contour=None):
         import math
@@ -651,17 +645,12 @@ class FilterContour:
 
         if len(contours) == 0:
             print("Contour list is empty")
-            return (contours, )
+            return ([[]], contours)
 
-        fitness = fitness[0]
-        select = select[0]
 
         # region prepare inputs
         if image is not None:
-            image = image[0]
             image = tensor2opencv(image)
-        if aux_contour is not None:
-            aux_contour = aux_contour[0]
 
         fitness = prepare_text_for_eval(fitness)
 
@@ -777,9 +766,8 @@ class FilterContour:
             **available_funcs
         }, {})
 
-        return (self.return_modes_map[select]
-                (contours, lambda c: fitness(c, image, aux_contour))
-                ,)
+        ret = self.return_modes_map[select](contours, lambda c: fitness(c, image, aux_contour))
+        return (ret[0], ret, )
 
 
 class ContourToMask:
