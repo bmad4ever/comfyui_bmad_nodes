@@ -1549,16 +1549,16 @@ class KMeansColor:
     def INPUT_TYPES(s):
         return {"required": {
             "image": ("IMAGE",),
-            "number_of_colors": ("INT", {"default": 2, "min": 2}),
+            "number_of_colors": ("INT", {"default": 2, "min": 1}),
             "max_iterations": ("INT", {"default": 100}),
             "eps": ("FLOAT", {"default": .2, "step": 0.05})
         }}
 
     RETURN_TYPES = ("IMAGE",)
-    FUNCTION = "get_dominant_colors"
+    FUNCTION = "get_colors"
     CATEGORY = "Bmad/CV/Color A."
 
-    def get_dominant_colors(self, image, number_of_colors, max_iterations, eps):
+    def get_colors(self, image, number_of_colors, max_iterations, eps):
         image = tensor2opencv(image, 3)
         pixels = image.reshape(-1, 3)
         pixels = np.float32(pixels)
@@ -1573,6 +1573,82 @@ class KMeansColor:
         res2 = res.reshape((image.shape))
         res2 = opencv2tensor(res2)
         return (res2,)
+
+
+class NaiveAutoKMeansColor:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "image": ("IMAGE",),
+            "max_k": ("INT", {"default": 8, "min": 3, "max": 16}),
+
+            # besides looking like the elbow,
+            #  a k's compactness divided the by first computed compactness should be below this value
+            "rc_threshold": ("FLOAT", {"default": .5, "max": 1, "min": 0.01, "step": 0.01}),
+
+            "max_iterations": ("INT", {"default": 100}),
+            "eps": ("FLOAT", {"default": .2, "step": 0.05})
+        }}
+
+    RETURN_TYPES = ("IMAGE", "INT")
+    FUNCTION = "get_colors"
+    CATEGORY = "Bmad/CV/Color A."
+
+    def get_colors(self, image, max_k, rc_threshold, max_iterations, eps):
+        image = tensor2opencv(image, 3)
+        pixels = image.reshape(-1, 3)
+        pixels = np.float32(pixels)
+
+        def normalize(vector):
+            return vector / np.linalg.norm(vector)
+
+        def compute_angle_at_k(prev_k_c, k_c, next_k_c):
+            p_km1 = np.array([-1, prev_k_c, 0])
+            p_k = np.array([0, k_c, 0])
+            p_kp1 = np.array([1, next_k_c, 0])
+            v1 = normalize(p_km1 - p_k)
+            v2 = normalize(p_kp1 - p_k)
+            return np.arccos(np.clip(np.dot(v1, v2), -1.0, 1.0))
+
+        # define criteria
+        criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, max_iterations, eps)
+
+        # compute k means and check for the elbow
+        #  here the elbow is the edgiest point on the compactness graph
+        best_angle = 7  # max is pi, when the line is perfectly straight; and the objective is to minimize the angle
+        max_c = best_rc = best_k = None
+        current_k_data = prev_k_data = best_k_data = None
+        for k in range(1, max_k + 2):
+            next_k_data = cv.kmeans(pixels, k, None, criteria, 10, cv.KMEANS_RANDOM_CENTERS)
+
+            if max_c is None:
+                max_c = next_k_data[0]
+
+            if next_k_data[0] == 0:
+                # if it is a perfect fit, leave the method
+                # avoids unneeded computation, and division by zero on k = 1
+                best_k_data = next_k_data
+                best_k = k
+                break
+
+            if k > 2:
+                rc = current_k_data[0] / max_c
+                angle = compute_angle_at_k(prev_k_data[0] / max_c, rc, next_k_data[0] / max_c)
+                if angle < best_angle or best_rc > rc_threshold:
+                    best_angle = angle
+                    best_k_data = current_k_data
+                    best_rc = rc
+                    best_k = k - 1
+
+            prev_k_data = current_k_data
+            current_k_data = next_k_data
+
+        # convert back into uint8, and make original image
+        center = np.uint8(best_k_data[2])
+        res = center[best_k_data[1].flatten()]
+        res2 = res.reshape((image.shape))
+        res2 = opencv2tensor(res2)
+        return (res2, best_k)
 
 
 class BuildColorRangeHSV:
@@ -1767,6 +1843,7 @@ NODE_CLASS_MAPPINGS = {
     "ColorDictionary (custom)": ColorCustomDictionary,
     "FindComplementaryColor": FindComplementaryColor,
     "KMeansColor": KMeansColor,
+    "NaiveAutoKMeansColor": NaiveAutoKMeansColor,
     "RGB to HSV": ColorToHSVColor,
     "SampleColorHSV": SampleColorHSV,
     "BuildColorRangeHSV (hsv)": BuildColorRangeHSV,
