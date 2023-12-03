@@ -129,6 +129,35 @@ class RepeatIntoGridImage:
         return (samples,)
 
 
+class UnGridImage:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"image": ("IMAGE",),
+                             "columns": grid_len_INPUT,
+                             "rows": grid_len_INPUT,
+                             }}
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "ungridify"
+    CATEGORY = "Bmad/image"
+    OUTPUT_IS_LIST = (True, )
+
+    def ungridify(self, image, columns, rows):
+        tiles = []
+        samples = image.movedim(-1, 1)
+        _, _, height, width = samples.size()
+        tile_height = height//rows
+        tile_width = width//columns
+
+        for y in range(0, rows * tile_height, tile_height):
+            for x in range(0, columns*tile_width, tile_width):
+                tile = samples[:, :, y:y+tile_height, x:x+tile_width]
+                tile = tile.movedim(1, -1)
+                tiles.append(tile)
+
+        return (tiles, )
+
+
 class ConditioningGridCond:
     """
     Does the job of multiple area conditions of the same size adjacent to each other.
@@ -811,6 +840,7 @@ NODE_CLASS_MAPPINGS = {
 
     "Repeat Into Grid (latent)": RepeatIntoGridLatent,
     "Repeat Into Grid (image)": RepeatIntoGridImage,
+    "UnGridify (image)": UnGridImage,
 
     "Conditioning Grid (cond)": ConditioningGridCond,
     "Conditioning Grid (string)": ConditioningGridStr,
