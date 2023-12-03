@@ -140,22 +140,22 @@ class UnGridImage:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "ungridify"
     CATEGORY = "Bmad/image"
-    OUTPUT_IS_LIST = (True, )
+    OUTPUT_IS_LIST = (True,)
 
     def ungridify(self, image, columns, rows):
         tiles = []
         samples = image.movedim(-1, 1)
         _, _, height, width = samples.size()
-        tile_height = height//rows
-        tile_width = width//columns
+        tile_height = height // rows
+        tile_width = width // columns
 
         for y in range(0, rows * tile_height, tile_height):
-            for x in range(0, columns*tile_width, tile_width):
-                tile = samples[:, :, y:y+tile_height, x:x+tile_width]
+            for x in range(0, columns * tile_width, tile_width):
+                tile = samples[:, :, y:y + tile_height, x:x + tile_width]
                 tile = tile.movedim(1, -1)
                 tiles.append(tile)
 
-        return (tiles, )
+        return (tiles,)
 
 
 class ConditioningGridCond:
@@ -404,8 +404,8 @@ class AdjustRect:
         # thus is closer to original input
         # note that xm and ym are always even
 
-        half_new_len_x = self.round_mode_map[round_mode]( (x2-x1)/xm )*xm//2
-        half_new_len_y = self.round_mode_map[round_mode]( (y2-y1)/ym )*ym//2
+        half_new_len_x = self.round_mode_map[round_mode]((x2 - x1) / xm) * xm // 2
+        half_new_len_y = self.round_mode_map[round_mode]((y2 - y1) / ym) * ym // 2
 
         # note: these points can fall outside the image space
         x2 = x1 = center_x
@@ -418,7 +418,7 @@ class AdjustRect:
         # convert to desired output format
         x1, y1, x2, y2 = rect_modes_map[output_format]["fromBounds"](x1, y1, x2, y2)
 
-        return (x1, y1, x2, y2, )
+        return (x1, y1, x2, y2,)
 
 
 class VAEEncodeBatch:
@@ -458,7 +458,7 @@ class AnyToAny:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "v": ("*", ),
+            "v": ("*",),
             "function": ("STRING", {"multiline": True, "default": ""}),
         }}
 
@@ -471,7 +471,7 @@ class AnyToAny:
         expression = eval(f"lambda v: {function}", {
             "__builtins__": {},
             "tuple": tuple, "list": list},
-            {})
+                          {})
         result = expression(v)
         return result
 
@@ -492,11 +492,12 @@ class MaskGridNKSamplersAdvanced(nodes.KSamplerAdvanced):
         types["required"]["mode"] = (s.fork_options, {"default": s.fork_options[0]})
         return types
 
-    RETURN_TYPES = ("LATENT", )
+    RETURN_TYPES = ("LATENT",)
     FUNCTION = "gen_batch"
     CATEGORY = "Bmad/experimental"
 
-    def gen_batch(self,  model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, start_at_step, end_at_step, return_with_leftover_noise,
+    def gen_batch(self, model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative,
+                  latent_image, start_at_step, end_at_step, return_with_leftover_noise,
                   mask, rows, columns, mode, denoise=1.0):
 
         # setup sizes
@@ -520,8 +521,10 @@ class MaskGridNKSamplersAdvanced(nodes.KSamplerAdvanced):
 
             # prepare latent w/ mask and send to ksampler
             sampled_latent = set_mask_node.set_mask(samples=latent_image, mask=new_mask)[0]
-            sampled_latent = super().sample(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative,
-                                                  sampled_latent, start_at_step, end_at_step, return_with_leftover_noise, denoise)[0]['samples']
+            sampled_latent = \
+            super().sample(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative,
+                           sampled_latent, start_at_step, end_at_step, return_with_leftover_noise, denoise)[0][
+                'samples']
 
             # adjust mask sizes for latent space
             mask_height //= 8
@@ -543,29 +546,33 @@ class MaskGridNKSamplersAdvanced(nodes.KSamplerAdvanced):
                 for c in range(columns):
                     # copy source mask to a new empty mask
                     new_mask = torch.zeros((latent_height_as_img, latent_width_as_img))
-                    new_mask[mask_height*r:mask_height*(r+1), mask_width*c:mask_width*(c+1)] = mask[0, :, :, 0]
+                    new_mask[mask_height * r:mask_height * (r + 1), mask_width * c:mask_width * (c + 1)] = mask[0, :, :,
+                                                                                                           0]
 
                     # prepare latent w/ mask and send to ksampler
                     new_latent = set_mask_node.set_mask(samples=latent_image.copy(), mask=new_mask)[0]
-                    new_latent = super().sample(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative,
-                                                      new_latent, start_at_step, end_at_step, return_with_leftover_noise, denoise)[0]['samples']
+                    new_latent = \
+                    super().sample(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive,
+                                   negative,
+                                   new_latent, start_at_step, end_at_step, return_with_leftover_noise, denoise)[0][
+                        'samples']
 
-                    latents.append(new_latent) # add new latent
+                    latents.append(new_latent)  # add new latent
 
-        return ({"samples":torch.cat([batch for batch in latents], dim=0)}, )
+        return ({"samples": torch.cat([batch for batch in latents], dim=0)},)
 
 
 class MergeLatentsBatchGridwise:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "batch": ("LATENT", ),
-            "mask": ("IMAGE", ),  # only to fetch the sizes, not really needed.
+            "batch": ("LATENT",),
+            "mask": ("IMAGE",),  # only to fetch the sizes, not really needed.
             "rows": ("INT", {"default": 1, "min": 1, "max": 16}),
             "columns": ("INT", {"default": 1, "min": 1, "max": 16})
         }}
 
-    RETURN_TYPES = ("LATENT", )
+    RETURN_TYPES = ("LATENT",)
     FUNCTION = "merge"
     CATEGORY = "Bmad/latent"
 
@@ -578,16 +585,16 @@ class MergeLatentsBatchGridwise:
         merged = torch.empty(size=(1, cs, hs, ws), dtype=batch["samples"].dtype, device=batch["samples"].device)
         for r in range(rows):
             for c in range(columns):
-                x2 = x1 = mask_width*c
+                x2 = x1 = mask_width * c
                 x2 += mask_width
-                y2 = y1 = mask_height*r
+                y2 = y1 = mask_height * r
                 y2 += mask_height
-                merged[0, :, y1:y2, x1:x2] = batch["samples"][c+r*columns, :, y1:y2, x1:x2]
+                merged[0, :, y1:y2, x1:x2] = batch["samples"][c + r * columns, :, y1:y2, x1:x2]
 
-        return ({"samples":merged}, )
+        return ({"samples": merged},)
 
 
-#===================================================
+# ===================================================
 
 # region cond lists
 
@@ -595,7 +602,7 @@ class CLIPEncodeMultiple(nodes.CLIPTextEncode):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "clip": ("CLIP", ),
+            "clip": ("CLIP",),
             "inputs_len": ("INT", {"default": 9, "min": 0, "max": 32}),
         }}
 
@@ -617,7 +624,7 @@ class ControlNetHadamard(nodes.ControlNetApply):
     def INPUT_TYPES(s):
         return {"required": {"conds": ("CONDITIONING",),
                              "control_net": ("CONTROL_NET",),
-                             "image": ("IMAGE", ),
+                             "image": ("IMAGE",),
                              "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
                              }}
 
@@ -646,8 +653,8 @@ class ControlNetHadamard(nodes.ControlNetApply):
 class ControlNetHadamardManual(ControlNetHadamard):
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": {"conds": ("CONDITIONING", ),
-                             "control_net": ("CONTROL_NET", ),
+        return {"required": {"conds": ("CONDITIONING",),
+                             "control_net": ("CONTROL_NET",),
                              "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
                              "inputs_len": ("INT", {"default": 9, "min": 0, "max": 32})
                              }}
@@ -666,13 +673,14 @@ class ControlNetHadamardManual(ControlNetHadamard):
             images.append(kwargs[arg_name][0])
         return super().apply(conds, control_net, images, strength)
 
+
 # endregion cond lists workflow
 
 
 class FlatLatentsIntoSingleGrid:
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": {"latents": ("LATENT",),}}
+        return {"required": {"latents": ("LATENT",), }}
 
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "flat_into_grid"
@@ -681,13 +689,13 @@ class FlatLatentsIntoSingleGrid:
     def flat_into_grid(self, latents):
         n, lc, lh, lw = latents['samples'].size()
         length_in_tiles = math.ceil(math.sqrt(n))
-        new_latent = torch.zeros((1, lc, lh*math.ceil(n/length_in_tiles), lw*length_in_tiles),
+        new_latent = torch.zeros((1, lc, lh * math.ceil(n / length_in_tiles), lw * length_in_tiles),
                                  dtype=latents["samples"].dtype, device=latents["samples"].device)
         r = c = 0  # row and column indexes
         for i in range(n):
-            x1 = x2 = lw*c
+            x1 = x2 = lw * c
             x2 += lw
-            y1 = y2 = lh*r
+            y1 = y2 = lh * r
             y2 += lh
             new_latent[0, :, y1:y2, x1:x2] = latents["samples"][i, :, :, :]
             c += 1
@@ -695,7 +703,7 @@ class FlatLatentsIntoSingleGrid:
                 c = 0
                 r += 1
 
-        return ({"samples":new_latent},)
+        return ({"samples": new_latent},)
 
 
 class ColorRGB:
@@ -708,7 +716,7 @@ class ColorRGB:
     CATEGORY = "Bmad/image"
 
     def ret(self, r, g, b):
-        return ([r, g, b], )
+        return ([r, g, b],)
 
 
 class ColorRGBFromHex:
@@ -725,13 +733,13 @@ class ColorRGBFromHex:
         hex_color_pattern = r'^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$'
         if re.match(hex_color_pattern, hex) is None:
             print_yellow(f"ColorRGBFromHex node > The following is not a valid hex code:{hex}")
-        return (hex, )
+        return (hex,)
 
 
 class ImageBatchToList:
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": {"images": ("IMAGE", )}}
+        return {"required": {"images": ("IMAGE",)}}
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "to_list"
@@ -740,7 +748,7 @@ class ImageBatchToList:
 
     def to_list(self, images):
         image_list = [images[i][None, ...] for i in range(images.shape[0])]
-        return (image_list, )
+        return (image_list,)
 
 
 # region  get items from list
@@ -751,7 +759,7 @@ class UnMakeListMeta(type):
             attrs['RETURN_TYPES'] = tuple([attrs["TYPE"].upper() for _ in range(32)])
 
         if 'CATEGORY' not in attrs:
-            attrs['CATEGORY'] = (f'Bmad/Lists', )
+            attrs['CATEGORY'] = (f'Bmad/Lists',)
 
         attrs['FUNCTION'] = 'get_all'
         attrs['INPUT_IS_LIST'] = True
@@ -765,6 +773,7 @@ class UnMakeListMeta(type):
                     "list": (attrs["TYPE"].upper(), {"forceInput": True})
                 }
             }
+
         attrs['get_all'] = get_all
 
         if 'INPUT_TYPES' not in attrs:
@@ -773,14 +782,90 @@ class UnMakeListMeta(type):
         return super().__new__(cls, name, bases, attrs)
 
 
+class GetSingleFromListMeta(type):
+    """
+    Allows random access too using primitive node!
+    Can also use negative indexes to access in reverse.
+    """
+
+    def __new__(cls, name, bases, attrs):
+        if 'RETURN_TYPES' not in attrs:
+            attrs['RETURN_TYPES'] = (attrs["TYPE"].upper(),)
+
+        if 'CATEGORY' not in attrs:
+            attrs['CATEGORY'] = (f'Bmad/Lists',)
+
+        attrs['FUNCTION'] = 'get_one'
+        attrs['INPUT_IS_LIST'] = True
+
+        def get_one(self, list, index):
+            index = index[0]
+            index = np.sign(index) * (index % len(list))
+            return (list[index],)
+
+        def INPUT_TYPES(cls):
+            return {
+                "required": {
+                    "list": (attrs["TYPE"].upper(), {"forceInput": True}),
+                    "index": ("INT", {"default": 0, "min": 0})
+                }
+            }
+
+        attrs['get_one'] = get_one
+
+        if 'INPUT_TYPES' not in attrs:
+            attrs['INPUT_TYPES'] = classmethod(INPUT_TYPES)
+
+        return super().__new__(cls, name, bases, attrs)
+
+
 class FromListGetImages(metaclass=UnMakeListMeta):  TYPE = "IMAGE"
+
+
 class FromListGetLatents(metaclass=UnMakeListMeta):  TYPE = "LATENT"
+
+
 class FromListGetConds(metaclass=UnMakeListMeta):  TYPE = "CONDITIONING"
+
+
 class FromListGetModels(metaclass=UnMakeListMeta):  TYPE = "MODEL"
+
+
 class FromListGetColors(metaclass=UnMakeListMeta):  TYPE = "COLOR"
+
+
 class FromListGetStrings(metaclass=UnMakeListMeta): TYPE = "STRING"
+
+
 class FromListGetInts(metaclass=UnMakeListMeta): TYPE = "INT"
+
+
 class FromListGetFloats(metaclass=UnMakeListMeta): TYPE = "FLOAT"
+
+
+class FromListGet1Image(metaclass=GetSingleFromListMeta):  TYPE = "IMAGE"
+
+
+class FromListGet1Latent(metaclass=GetSingleFromListMeta):  TYPE = "LATENT"
+
+
+class FromListGet1Cond(metaclass=GetSingleFromListMeta):  TYPE = "CONDITIONING"
+
+
+class FromListGet1Model(metaclass=GetSingleFromListMeta):  TYPE = "MODEL"
+
+
+class FromListGet1Color(metaclass=GetSingleFromListMeta):  TYPE = "COLOR"
+
+
+class FromListGet1String(metaclass=GetSingleFromListMeta): TYPE = "STRING"
+
+
+class FromListGet1Int(metaclass=GetSingleFromListMeta): TYPE = "INT"
+
+
+class FromListGet1Float(metaclass=GetSingleFromListMeta): TYPE = "FLOAT"
+
 
 # endregion
 
@@ -790,7 +875,7 @@ class FromListGetFloats(metaclass=UnMakeListMeta): TYPE = "FLOAT"
 class MakeListMeta(type):
     def __new__(cls, name, bases, attrs):
         if 'RETURN_TYPES' not in attrs:
-            attrs['RETURN_TYPES'] = (attrs["TYPE"].upper(), )
+            attrs['RETURN_TYPES'] = (attrs["TYPE"].upper(),)
 
         if 'CATEGORY' not in attrs:
             attrs['CATEGORY'] = (f'Bmad/Lists',)
@@ -817,13 +902,28 @@ class MakeListMeta(type):
 
 
 class ToImageList(metaclass=MakeListMeta): TYPE = "IMAGE"
+
+
 class ToLatentList(metaclass=MakeListMeta): TYPE = "LATENT"
+
+
 class ToCondList(metaclass=MakeListMeta): TYPE = "CONDITIONING"
+
+
 class ToModelList(metaclass=MakeListMeta): TYPE = "MODEL"
+
+
 class ToColorList(metaclass=MakeListMeta): TYPE = "COLOR"
+
+
 class ToStringList(metaclass=MakeListMeta): TYPE = "STRING"
+
+
 class ToIntList(metaclass=MakeListMeta): TYPE = "INT"
+
+
 class ToFloatList(metaclass=MakeListMeta): TYPE = "FLOAT"
+
 
 # endregion
 
@@ -872,6 +972,14 @@ NODE_CLASS_MAPPINGS = {
     "FromListGetStrings": FromListGetStrings,
     "FromListGetInts": FromListGetInts,
     "FromListGetFloats": FromListGetFloats,
+    "FromListGet1Image": FromListGet1Image,
+    "FromListGet1Latent": FromListGet1Latent,
+    "FromListGet1Cond": FromListGet1Cond,
+    "FromListGet1Model": FromListGet1Model,
+    "FromListGet1Color": FromListGet1Color,
+    "FromListGet1String": FromListGet1String,
+    "FromListGet1Int": FromListGet1Int,
+    "FromListGet1Float": FromListGet1Float,
     "ToImageList": ToImageList,
     "ToLatentList": ToLatentList,
     "ToCondList": ToCondList,
