@@ -118,21 +118,32 @@ def compute_normalized_inverse_squared_difference_matrix(image, target_color, po
 
 
 def compute_average_nisd(image, target_color, mask=None, power=2):
+    """
+    @param image: image to analyse
+    @param target_color: color to compute the "distance" to
+    @param mask: tuple: normalized mask; number of zeroes
+    @param power: adjust concavity of the "distance weight" function
+    @return: the fitness of the color;
+             how well it complements the source image within the given mask;
+             lower values are better.
+    """
     # difference matrix with the euclidean distances
     diff_matrix = compute_normalized_inverse_squared_difference_matrix(image, target_color, power)
 
     # return mean or apply the mask if provided
     if mask is None:
         return np.mean(diff_matrix)
-    masked_diff_matrix = np.where(mask[:, :, np.newaxis], diff_matrix, 0)
+    else:
+        masked_pixel_count = mask[1]
+        mask = mask[0]
 
-    # calculate the average distance for masked pixels
-    masked_pixel_count = np.count_nonzero(mask)
     if masked_pixel_count == 0:
         return 0.0  # handle the case where there are no masked pixels
 
-    average_isd = np.sum(masked_diff_matrix) / masked_pixel_count
-    return average_isd
+    # calculate the average distance for masked pixels
+    masked_diff_matrix = mask[:, :] * diff_matrix
+    average_nisd = np.sum(masked_diff_matrix) / masked_pixel_count
+    return average_nisd
 
 
 def find_complementary_color(image, color_dict, mask=None, power=2):
@@ -153,6 +164,11 @@ def find_complementary_color(image, color_dict, mask=None, power=2):
     """
     lowest_avg_distance = 2  # 1 is the theoretical maximum possible value
     closest_color = None
+
+    if mask is not None:
+        mask = mask[:, :]/255
+        non_zero_count = np.count_nonzero(mask)  # compute only once and wrap within sent arg
+        mask = (mask, non_zero_count)
 
     for color_name, color_rgb in color_dict.items():
         avg_isd = compute_average_nisd(image, color_rgb, mask, power)
