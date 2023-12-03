@@ -11,7 +11,9 @@ var mi_node_types = {
     "ToCondList": "CONDITIONING",
     "ToModelList": "MODEL",
     "ToColorList": "COLOR",
-    "ToStringList": "STRING"
+    "ToStringList": "STRING",
+    "ToIntList": "INT",
+    "ToFloatList": "FLOAT",
     }
 
 

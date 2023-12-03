@@ -7,7 +7,9 @@ var mo_node_types = {
     "FromListGetConds":  "CONDITIONING",
     "FromListGetModels": "MODEL",
     "FromListGetColors": "COLOR",
-    "FromListGetStrings": "STRING"
+    "FromListGetStrings": "STRING",
+    "FromListGetInts": "INT",
+    "FromListGetFloats": "FLOAT",
 }
 
 

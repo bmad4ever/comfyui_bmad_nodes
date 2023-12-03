@@ -750,6 +750,8 @@ class FromListGetConds(metaclass=UnMakeListMeta):  TYPE = "CONDITIONING"
 class FromListGetModels(metaclass=UnMakeListMeta):  TYPE = "MODEL"
 class FromListGetColors(metaclass=UnMakeListMeta):  TYPE = "COLOR"
 class FromListGetStrings(metaclass=UnMakeListMeta): TYPE = "STRING"
+class FromListGetInts(metaclass=UnMakeListMeta): TYPE = "INT"
+class FromListGetFloats(metaclass=UnMakeListMeta): TYPE = "FLOAT"
 
 # endregion
 
@@ -791,6 +793,8 @@ class ToCondList(metaclass=MakeListMeta): TYPE = "CONDITIONING"
 class ToModelList(metaclass=MakeListMeta): TYPE = "MODEL"
 class ToColorList(metaclass=MakeListMeta): TYPE = "COLOR"
 class ToStringList(metaclass=MakeListMeta): TYPE = "STRING"
+class ToIntList(metaclass=MakeListMeta): TYPE = "INT"
+class ToFloatList(metaclass=MakeListMeta): TYPE = "FLOAT"
 
 # endregion
 
@@ -836,10 +840,14 @@ NODE_CLASS_MAPPINGS = {
     "FromListGetModels": FromListGetModels,
     "FromListGetColors": FromListGetColors,
     "FromListGetStrings": FromListGetStrings,
+    "FromListGetInts": FromListGetInts,
+    "FromListGetFloats": FromListGetFloats,
     "ToImageList": ToImageList,
     "ToLatentList": ToLatentList,
     "ToCondList": ToCondList,
     "ToModelList": ToModelList,
     "ToColorList": ToColorList,
-    "ToStringList": ToStringList
+    "ToStringList": ToStringList,
+    "ToIntList": ToIntList,
+    "ToFloatList": ToFloatList
 }
