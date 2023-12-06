@@ -1,4 +1,6 @@
 import math
+from abc import ABC, abstractmethod
+
 import cv2 as cv
 import numpy as np
 
@@ -38,6 +40,17 @@ border_types_excluding_transparent = border_types_map.copy()
 border_types_excluding_transparent.pop("BORDER_TRANSPARENT")
 border_types_excluding_transparent = list(border_types_excluding_transparent.keys())
 
+
+interpolation_types_map = {
+    "INTER_NEAREST": cv.INTER_NEAREST,
+    "INTER_LINEAR": cv.INTER_LINEAR,
+    "INTER_AREA": cv.INTER_AREA,
+    "INTER_LANCZOS4": cv.INTER_LANCZOS4,
+    "INTER_CUBIC": cv.INTER_CUBIC,
+#    "INTER_LINEAR_EXACT": cv.INTER_LINEAR_EXACT,
+#    "INTER_NEAREST_EXACT": cv.INTER_NEAREST_EXACT,
+}
+interpolation_types = list(interpolation_types_map.keys())
 
 # endregion
 
@@ -1793,6 +1806,84 @@ v_quant2(0,1).interpolate(.5, [0, 255]).scale_by_constant(50) if 2 < v_median < 
 # endregion
 
 
+#region transforms
+
+
+class Remap:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "image": ("IMAGE", ),
+            "remap": ("REMAP", {"forceInput": True}),
+            "interpolation": (interpolation_types, {"default": interpolation_types[2]}),
+            "swap_xy": ("BOOLEAN", {"default": False}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "transform"
+    CATEGORY = "Bmad/CV/Transform"
+
+    def transform(self, image, remap, interpolation, swap_xy):
+        img = tensor2opencv(image)
+        height = img.shape[0]
+        width = img.shape[1]
+        func = remap["func"]
+        xargs = remap["xargs"]
+
+        xs_to = np.array([range(width)] * height).astype(np.float32)
+        ys_to = np.array([[y for _ in range(width)] for y in range(height)]).astype(np.float32)
+        if not swap_xy:
+            xs, ys = func(xs_to, ys_to, width, height, *xargs)
+        else:
+            ys, xs = func(ys_to, xs_to, height, width, *xargs)
+
+        new_img = cv.remap(img, xs, ys, interpolation_types_map[interpolation])
+        return (opencv2tensor(new_img) ,)
+
+
+class RemapBase(ABC):
+    RETURN_TYPES = ("REMAP",)
+    FUNCTION = "send_remap"
+    CATEGORY = "Bmad/CV/Transform"
+
+
+class InnerCylinderRemap(RemapBase):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "fov": ("INT", {"default": 90, "min": 1, "max": 179})
+            }
+        }
+
+    def send_remap(self, fov):
+        from .remap_functions import remap_inner_cylinder
+        return ({
+            "func": remap_inner_cylinder,
+            "xargs": [fov]
+                },)
+
+
+class OuterCylinderRemap(RemapBase):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "fov": ("INT", {"default": 90, "min": 1, "max": 179})
+            }
+        }
+
+    def send_remap(self, fov):
+        from .remap_functions import remap_outer_cylinder
+        return ({
+            "func": remap_outer_cylinder,
+            "xargs": [fov]
+                },)
+
+
+
+#endregion
+
+
 NODE_CLASS_MAPPINGS = {
     "ConvertImg": ConvertImg,
     "CopyMakeBorder": CopyMakeBorderSimple,
@@ -1836,4 +1927,8 @@ NODE_CLASS_MAPPINGS = {
     "SampleColorHSV": SampleColorHSV,
     "BuildColorRangeHSV (hsv)": BuildColorRangeHSV,
     "BuildColorRangeAdvanced (hsv)": BuildColorRangeHSVAdvanced,
+
+    "Remap": Remap,
+    "InnerCylinder (remap)": InnerCylinderRemap,
+    "OuterCylinder (remap)": OuterCylinderRemap,
 }
