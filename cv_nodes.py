@@ -1488,7 +1488,9 @@ class FindComplementaryColor:
 
             # this is a quality of life feature, so that it is easier to run the node and test stuff
             # the behavior (img resize w/ lin. interpolation) can be avoided by setting up the data prior to this node
-            image = cv.resize(image, tuple(mask.shape), interpolation=cv.INTER_LINEAR)
+            if image.shape[0:2] != mask.shape[0:2]:
+                print("FindComplementaryColor node will resize image to fit mask.")
+                image = cv.resize(image, (mask.shape[1], mask.shape[0]), interpolation=cv.INTER_LINEAR)
 
         color = find_complementary_color(image, color_dict, mask, power)
         return (list(color_dict[color]), color,)
