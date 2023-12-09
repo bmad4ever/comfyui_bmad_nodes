@@ -1825,7 +1825,7 @@ class Remap:
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "MASK", "IMAGE", "MASK")
+    RETURN_TYPES = ("IMAGE", "MASK",)
     FUNCTION = "transform"
     CATEGORY = "Bmad/CV/Transform"
 

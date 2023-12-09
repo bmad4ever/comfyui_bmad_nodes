@@ -121,9 +121,10 @@ def get_quadratic_curve_coeffs(p0, p1, p2):
     return np.linalg.solve(a, b)
 
 
-def remap_inside_parabolas(src, _, roi_points_img):
+def remap_inside_parabolas(src, _, roi_points_img, recalled=False):
     """
     @param roi_points_img: dst sized mask with the 6 points annotated
+    @param recalled: safeguard against infinite recursive calls.
     @return: @return: x and y mappings ( to the original image pixels ) and roi bounding box coordinates
     """
 
@@ -140,12 +141,22 @@ def remap_inside_parabolas(src, _, roi_points_img):
     flags = cv.KMEANS_RANDOM_CENTERS
     compactness, labels, km_centers = cv.kmeans(centers, 2, None, criteria, 10, flags)
 
+    zero_label_highest_y = km_centers[0, 1] > km_centers[1, 1]
+    c1 = sorted(centers[labels[:, 0] == (not zero_label_highest_y)], key=lambda c: c[0])
+    c2 = sorted(centers[labels[:, 0] == zero_label_highest_y], key=lambda c: c[0])
+
     km_centers_v = km_centers[0] - km_centers[1]
     if abs(km_centers_v[0]) > abs(km_centers_v[1]):
+        if not recalled:  # shouldn't get stuck, if equal proceeds; but will use a safeguard against potential oversights!
+            xs, ys, bb = remap_inside_parabolas(cv.rotate(src, cv.ROTATE_90_CLOCKWISE),
+                                                _, cv.flip(cv.rotate(roi_points_img, cv.ROTATE_90_CLOCKWISE), 1),
+                                                True)
+            bb = (bb[1], bb[0], bb[3], bb[2])  # fix bb
+            return np.rot90(np.fliplr(ys)), np.rot90(np.fliplr(xs)), bb
         raise("The current implementation only supports parabolas with no x repeated points;"
-              " i.e, at no point a vertical image should cross two points of the parabola.")
+              " i.e, at no point a vertical line should cross two points of the parabola.")
 
-    # kmeans may fail to group the points correctly, when they are close to each other
+    # kmeans may fail to group the points correctly when they are close to each other
     # TODO: implement a more robust alternative
     #   idea 1: draw 2 lines in the mask and fetch the points from their contours
     #     could try to fit to more points instead of 3... but what if line is jittery?
@@ -155,12 +166,18 @@ def remap_inside_parabolas(src, _, roi_points_img):
     c1 = sorted(centers[labels[:, 0] == (not zero_label_highest_y)], key=lambda c: c[0])
     c2 = sorted(centers[labels[:, 0] == zero_label_highest_y], key=lambda c: c[0])
 
-    bb = (
+    # get upper and lower bb leeway
+    lower_limit_leeway = max(c1, key=lambda c: c[1])[1] - min(c1, key=lambda c: c[1])[1]
+    upper_limit_leeway = max(c2, key=lambda c: c[1])[1] - min(c2, key=lambda c: c[1])[1]
+    bb = [
         int(min([c[0] for c in centers]))
-        , int(min([c[1] for c in centers]))
+        , int(min([c[1] for c in centers]) - upper_limit_leeway)
         , int(max([c[0] for c in centers]))
-        , int(max([c[1] for c in centers]))
-    )
+        , int(max([c[1] for c in centers]) + lower_limit_leeway)
+    ]
+    # clip lower and upper bounds (within dst)
+    bb[1] = max(bb[1], 0)
+    bb[3] = min(bb[3], roi_points_img.shape[0])
 
     origin = [bb[0], bb[1]]
     dst_box_height = int(bb[3] - bb[1])
