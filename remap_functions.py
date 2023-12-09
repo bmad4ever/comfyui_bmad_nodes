@@ -1,6 +1,17 @@
 import numpy as np
 
 
+def xy_pixel_indexes(img, swap=False):
+    height, width = img.shape[:2]
+    xs = np.array([range(width)] * height).astype(np.float32)
+    ys = np.array([[y for _ in range(width)] for y in range(height)]).astype(np.float32)
+
+    if swap:
+        return ys, xs, height, width
+    else:
+        return xs, ys, width, height
+
+
 def quadratic_formulae(a, b, c):
     # should I use np.root instead? mind that a is an array
     vs = np.sqrt(b ** 2 - 4 * a * c)
@@ -29,7 +40,7 @@ def debug_draw_outer_cylinder_proj(z0, r, f, o):
     plt.savefig('plot_cylinder_projection.png')
 
 
-def remap_inner_cylinder(xs, ys, w, h, fov=90):
+def remap_inner_cylinder(src, _, fov=90, swap_xy=False):
     """
     Adapted from https://stackoverflow.com/questions/12017790/warp-image-to-appear-in-cylindrical-projection ;
     radius always equal to w; and f changes according to fov.
@@ -40,6 +51,8 @@ def remap_inner_cylinder(xs, ys, w, h, fov=90):
     @param fov: field of view in degrees
     @return: x and y mappings ( to the original image pixels )
     """
+    xs, ys, w, h = xy_pixel_indexes(src, swap_xy)
+
     pc = [xs - w / 2, ys - h / 2]  # offset center
 
     ratio = np.tan(np.deg2rad(fov / 2))
@@ -53,10 +66,14 @@ def remap_inner_cylinder(xs, ys, w, h, fov=90):
     final_point = [pc[0] * zc / f, pc[1] * zc / f]
     final_point[0] += w / 2
     final_point[1] += h / 2
-    return final_point[0], final_point[1]
+
+    if swap_xy:
+        return final_point[1], final_point[0]
+    else:
+        return final_point[0], final_point[1]
 
 
-def remap_outer_cylinder(xs, ys, w, h, fov=90):
+def remap_outer_cylinder(src, _, fov=90, swap_xy=False):
     """
     Map to a cylinder far away.
     The cylinder radius and position is set to edge the imaginary horizontal view frustum
@@ -72,6 +89,7 @@ def remap_outer_cylinder(xs, ys, w, h, fov=90):
     @param fov: field of view in degrees
     @return: x and y mappings ( to the original image pixels )
     """
+    xs, ys, w, h = xy_pixel_indexes(src, swap_xy)
 
     pc = [xs - w / 2, ys - h / 2]  # offset center
 
@@ -89,4 +107,9 @@ def remap_outer_cylinder(xs, ys, w, h, fov=90):
     final_point = [pc[0] * zc / f, pc[1] * zc / f]
     final_point[0] += w / 2
     final_point[1] += h / 2
-    return final_point
+    if swap_xy:
+        return final_point[1], final_point[0]
+    else:
+        return final_point[0], final_point[1]
+
+

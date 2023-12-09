@@ -1815,33 +1815,30 @@ class Remap:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "image": ("IMAGE", ),
+            "src": ("IMAGE", ),
             "remap": ("REMAP", {"forceInput": True}),
             "interpolation": (interpolation_types, {"default": interpolation_types[2]}),
-            "swap_xy": ("BOOLEAN", {"default": False}),
+            },
+            "optional": {
+                "dst": ("IMAGE", ),
+                "src_mask": ("MASK", ),
             }
         }
 
-    RETURN_TYPES = ("IMAGE",)
+    RETURN_TYPES = ("IMAGE", "MASK")
     FUNCTION = "transform"
     CATEGORY = "Bmad/CV/Transform"
 
-    def transform(self, image, remap, interpolation, swap_xy):
-        img = tensor2opencv(image)
-        height = img.shape[0]
-        width = img.shape[1]
+    def transform(self, src, remap, interpolation, dst=None, src_mask=None):
+        src = tensor2opencv(src)
         func = remap["func"]
         xargs = remap["xargs"]
+        blank_src = np.ones(src.shape[:2]) * 255 if src_mask is None else tensor2opencv(src_mask,1)
 
-        xs_to = np.array([range(width)] * height).astype(np.float32)
-        ys_to = np.array([[y for _ in range(width)] for y in range(height)]).astype(np.float32)
-        if not swap_xy:
-            xs, ys = func(xs_to, ys_to, width, height, *xargs)
-        else:
-            ys, xs = func(ys_to, xs_to, height, width, *xargs)
-
-        new_img = cv.remap(img, xs, ys, interpolation_types_map[interpolation])
-        return (opencv2tensor(new_img) ,)
+        xs, ys = func(src, dst, *xargs)
+        new_img = cv.remap(src, xs, ys, interpolation_types_map[interpolation])
+        mask = cv.remap(blank_src, xs, ys, interpolation_types_map[interpolation])
+        return (opencv2tensor(new_img) , opencv2tensor(mask))
 
 
 class RemapBase(ABC):
@@ -1854,15 +1851,16 @@ class InnerCylinderRemap(RemapBase):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "fov": ("INT", {"default": 90, "min": 1, "max": 179})
+            "fov": ("INT", {"default": 90, "min": 1, "max": 179}),
+            "swap_xy": ("BOOLEAN", {"default": False}),
             }
         }
 
-    def send_remap(self, fov):
+    def send_remap(self, fov, swap_xy):
         from .remap_functions import remap_inner_cylinder
         return ({
             "func": remap_inner_cylinder,
-            "xargs": [fov]
+            "xargs": [fov, swap_xy]
                 },)
 
 
@@ -1870,15 +1868,16 @@ class OuterCylinderRemap(RemapBase):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "fov": ("INT", {"default": 90, "min": 1, "max": 179})
+            "fov": ("INT", {"default": 90, "min": 1, "max": 179}),
+            "swap_xy": ("BOOLEAN", {"default": False}),
             }
         }
 
-    def send_remap(self, fov):
+    def send_remap(self, fov, swap_xy):
         from .remap_functions import remap_outer_cylinder
         return ({
             "func": remap_outer_cylinder,
-            "xargs": [fov]
+            "xargs": [fov, swap_xy]
                 },)
 
 
