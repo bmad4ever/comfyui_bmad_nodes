@@ -1820,25 +1820,35 @@ class Remap:
             "interpolation": (interpolation_types, {"default": interpolation_types[2]}),
             },
             "optional": {
-                "dst": ("IMAGE", ),
+                "dst": ("IMAGE", ),  # each remaps sets this if used?
                 "src_mask": ("MASK", ),
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "MASK")
+    RETURN_TYPES = ("IMAGE", "MASK", "IMAGE", "MASK")
     FUNCTION = "transform"
     CATEGORY = "Bmad/CV/Transform"
 
-    def transform(self, src, remap, interpolation, dst=None, src_mask=None):
+    def transform(self, src, remap, interpolation, dst, src_mask=None):
         src = tensor2opencv(src)
+        dst = tensor2opencv(dst)
         func = remap["func"]
         xargs = remap["xargs"]
-        blank_src = np.ones(src.shape[:2]) * 255 if src_mask is None else tensor2opencv(src_mask,1)
+        blank_src = np.ones(src.shape[:2]) * 255 if src_mask is None else tensor2opencv(src_mask, 1)
 
-        xs, ys = func(src, dst, *xargs)
-        new_img = cv.remap(src, xs, ys, interpolation_types_map[interpolation])
+        xs, ys, bb = func(src, dst, *xargs)
+        remap_img = cv.remap(src, xs, ys, interpolation_types_map[interpolation])
         mask = cv.remap(blank_src, xs, ys, interpolation_types_map[interpolation])
-        return (opencv2tensor(new_img) , opencv2tensor(mask))
+
+        if bb is not None:
+            new_img = np.zeros_like(dst)
+            new_img[bb[1]:bb[3], bb[0]:bb[2], :] = remap_img
+            remap_img = new_img
+            new_img = np.zeros(dst.shape[:2])
+            new_img[bb[1]:bb[3], bb[0]:bb[2]] = mask
+            mask = new_img
+
+        return (opencv2tensor(remap_img) , opencv2tensor(mask))
 
 
 class RemapBase(ABC):
@@ -1880,6 +1890,21 @@ class OuterCylinderRemap(RemapBase):
             "xargs": [fov, swap_xy]
                 },)
 
+
+class RemapInsideParabolas(RemapBase):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "dst_mask_with_6_points": ("MASK", ),
+            }
+        }
+
+    def send_remap(self, dst_mask_with_6_points):
+        from .remap_functions import remap_inside_parabolas
+        return ({
+            "func": remap_inside_parabolas,
+            "xargs": [tensor2opencv(dst_mask_with_6_points, 1)]
+                },)
 
 
 #endregion
@@ -1932,4 +1957,5 @@ NODE_CLASS_MAPPINGS = {
     "Remap": Remap,
     "InnerCylinder (remap)": InnerCylinderRemap,
     "OuterCylinder (remap)": OuterCylinderRemap,
+    "RemapInsideParabolas (remap)": RemapInsideParabolas,
 }
