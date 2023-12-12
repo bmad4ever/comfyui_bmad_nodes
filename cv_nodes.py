@@ -1895,15 +1895,15 @@ class RemapInsideParabolas(RemapBase):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "dst_mask_with_6_points": ("MASK", ),
+            "dst_mask_with_2_parabolas": ("MASK", ),
             }
         }
 
-    def send_remap(self, dst_mask_with_6_points):
+    def send_remap(self, dst_mask_with_2_parabolas):
         from .remap_functions import remap_inside_parabolas
         return ({
             "func": remap_inside_parabolas,
-            "xargs": [tensor2opencv(dst_mask_with_6_points, 1)]
+            "xargs": [tensor2opencv(dst_mask_with_2_parabolas, 1)]
                 },)
 
 
