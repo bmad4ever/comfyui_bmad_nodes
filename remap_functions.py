@@ -2,7 +2,6 @@ import itertools
 
 import numpy as np
 import cv2 as cv
-import skimage.morphology
 
 
 def xy_pixel_indexes(img, swap=False):
@@ -44,7 +43,7 @@ def debug_draw_outer_cylinder_proj(z0, r, f, o):
     plt.savefig('plot_cylinder_projection.png')
 
 
-def remap_inner_cylinder(src, _, fov=90, swap_xy=False):
+def remap_inner_cylinder(src, fov=90, swap_xy=False):
     """
     Adapted from https://stackoverflow.com/questions/12017790/warp-image-to-appear-in-cylindrical-projection ;
     radius always equal to w; and f changes according to fov.
@@ -74,7 +73,7 @@ def remap_inner_cylinder(src, _, fov=90, swap_xy=False):
         return final_point[0], final_point[1], None
 
 
-def remap_outer_cylinder(src, _, fov=90, swap_xy=False):
+def remap_outer_cylinder(src, fov=90, swap_xy=False):
     """
     Map to a cylinder far away.
     The cylinder radius and position is set to edge the imaginary horizontal view frustum
@@ -196,7 +195,7 @@ def get_knee_point(endpoints, line_points):
     return min(line_points, key=lambda p: angle_at_p(endpoints[0], p, endpoints[1]))
 
 
-def remap_inside_parabolas(src, _, roi_img, recalled=False):
+def remap_inside_parabolas(src, roi_img, recalled=False):
     """
     @param roi_points_img: dst sized mask with the 6 points annotated
     @param recalled: safeguard against infinite recursive calls.
@@ -223,8 +222,8 @@ def remap_inside_parabolas(src, _, roi_img, recalled=False):
                   "It may be the case that the parabolas are too flat.")
         case 1:  # current orientation won't work
             if not recalled:  # shouldn't get stuck, if equal proceeds; but will use a safeguard against potential oversights!
-                xs, ys, bb = remap_inside_parabolas(cv.rotate(src, cv.ROTATE_90_CLOCKWISE),
-                                                    _, cv.flip(cv.rotate(roi_points_img, cv.ROTATE_90_CLOCKWISE), 1),
+                xs, ys, bb = remap_inside_parabolas(cv.rotate(src, cv.ROTATE_90_CLOCKWISE)
+                                                    , cv.flip(cv.rotate(roi_points_img, cv.ROTATE_90_CLOCKWISE), 1),
                                                     True)
                 bb = (bb[1], bb[0], bb[3], bb[2])  # fix bb
                 return np.rot90(np.fliplr(ys)), np.rot90(np.fliplr(xs)), bb

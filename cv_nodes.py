@@ -1829,14 +1829,15 @@ class Remap:
     FUNCTION = "transform"
     CATEGORY = "Bmad/CV/Transform"
 
-    def transform(self, src, remap, interpolation, dst, src_mask=None):
+    def transform(self, src, remap, interpolation, dst=None, src_mask=None):
         src = tensor2opencv(src)
-        dst = tensor2opencv(dst)
+        if dst is not None:
+            dst = tensor2opencv(dst)
         func = remap["func"]
         xargs = remap["xargs"]
         blank_src = np.ones(src.shape[:2]) * 255 if src_mask is None else tensor2opencv(src_mask, 1)
 
-        xs, ys, bb = func(src, dst, *xargs)
+        xs, ys, bb = func(src, *xargs)
         remap_img = cv.remap(src, xs, ys, interpolation_types_map[interpolation])
         mask = cv.remap(blank_src, xs, ys, interpolation_types_map[interpolation])
 
