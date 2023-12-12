@@ -819,51 +819,25 @@ class GetSingleFromListMeta(type):
         return super().__new__(cls, name, bases, attrs)
 
 
+class FromListGetMasks(metaclass=UnMakeListMeta):  TYPE = "MASK"
 class FromListGetImages(metaclass=UnMakeListMeta):  TYPE = "IMAGE"
-
-
 class FromListGetLatents(metaclass=UnMakeListMeta):  TYPE = "LATENT"
-
-
 class FromListGetConds(metaclass=UnMakeListMeta):  TYPE = "CONDITIONING"
-
-
 class FromListGetModels(metaclass=UnMakeListMeta):  TYPE = "MODEL"
-
-
 class FromListGetColors(metaclass=UnMakeListMeta):  TYPE = "COLOR"
-
-
 class FromListGetStrings(metaclass=UnMakeListMeta): TYPE = "STRING"
-
-
 class FromListGetInts(metaclass=UnMakeListMeta): TYPE = "INT"
-
-
 class FromListGetFloats(metaclass=UnMakeListMeta): TYPE = "FLOAT"
 
 
+class FromListGet1Mask(metaclass=GetSingleFromListMeta):  TYPE = "MASK"
 class FromListGet1Image(metaclass=GetSingleFromListMeta):  TYPE = "IMAGE"
-
-
 class FromListGet1Latent(metaclass=GetSingleFromListMeta):  TYPE = "LATENT"
-
-
 class FromListGet1Cond(metaclass=GetSingleFromListMeta):  TYPE = "CONDITIONING"
-
-
 class FromListGet1Model(metaclass=GetSingleFromListMeta):  TYPE = "MODEL"
-
-
 class FromListGet1Color(metaclass=GetSingleFromListMeta):  TYPE = "COLOR"
-
-
 class FromListGet1String(metaclass=GetSingleFromListMeta): TYPE = "STRING"
-
-
 class FromListGet1Int(metaclass=GetSingleFromListMeta): TYPE = "INT"
-
-
 class FromListGet1Float(metaclass=GetSingleFromListMeta): TYPE = "FLOAT"
 
 
@@ -901,27 +875,14 @@ class MakeListMeta(type):
         return super().__new__(cls, name, bases, attrs)
 
 
+class ToMaskList(metaclass=MakeListMeta): TYPE = "MASK"
 class ToImageList(metaclass=MakeListMeta): TYPE = "IMAGE"
-
-
 class ToLatentList(metaclass=MakeListMeta): TYPE = "LATENT"
-
-
 class ToCondList(metaclass=MakeListMeta): TYPE = "CONDITIONING"
-
-
 class ToModelList(metaclass=MakeListMeta): TYPE = "MODEL"
-
-
 class ToColorList(metaclass=MakeListMeta): TYPE = "COLOR"
-
-
 class ToStringList(metaclass=MakeListMeta): TYPE = "STRING"
-
-
 class ToIntList(metaclass=MakeListMeta): TYPE = "INT"
-
-
 class ToFloatList(metaclass=MakeListMeta): TYPE = "FLOAT"
 
 
@@ -964,6 +925,7 @@ NODE_CLASS_MAPPINGS = {
 
     "ImageBatchToList": ImageBatchToList,
 
+    "FromListGetMasks": FromListGetMasks,
     "FromListGetImages": FromListGetImages,
     "FromListGetConds": FromListGetConds,
     "FromListGetLatents": FromListGetLatents,
@@ -972,6 +934,7 @@ NODE_CLASS_MAPPINGS = {
     "FromListGetStrings": FromListGetStrings,
     "FromListGetInts": FromListGetInts,
     "FromListGetFloats": FromListGetFloats,
+    "FromListGet1Mask": FromListGet1Mask,
     "FromListGet1Image": FromListGet1Image,
     "FromListGet1Latent": FromListGet1Latent,
     "FromListGet1Cond": FromListGet1Cond,
@@ -980,6 +943,7 @@ NODE_CLASS_MAPPINGS = {
     "FromListGet1String": FromListGet1String,
     "FromListGet1Int": FromListGet1Int,
     "FromListGet1Float": FromListGet1Float,
+    "ToMaskList": ToMaskList,
     "ToImageList": ToImageList,
     "ToLatentList": ToLatentList,
     "ToCondList": ToCondList,
