@@ -40,17 +40,17 @@ border_types_excluding_transparent = border_types_map.copy()
 border_types_excluding_transparent.pop("BORDER_TRANSPARENT")
 border_types_excluding_transparent = list(border_types_excluding_transparent.keys())
 
-
 interpolation_types_map = {
     "INTER_NEAREST": cv.INTER_NEAREST,
     "INTER_LINEAR": cv.INTER_LINEAR,
     "INTER_AREA": cv.INTER_AREA,
     "INTER_LANCZOS4": cv.INTER_LANCZOS4,
     "INTER_CUBIC": cv.INTER_CUBIC,
-#    "INTER_LINEAR_EXACT": cv.INTER_LINEAR_EXACT,
-#    "INTER_NEAREST_EXACT": cv.INTER_NEAREST_EXACT,
+    #    "INTER_LINEAR_EXACT": cv.INTER_LINEAR_EXACT,
+    #    "INTER_NEAREST_EXACT": cv.INTER_NEAREST_EXACT,
 }
 interpolation_types = list(interpolation_types_map.keys())
+
 
 # endregion
 
@@ -175,7 +175,7 @@ class FadeMaskEdges:
 
         # darken the white pixels based on smoothed distance and "edge tightness"
         diff = 1 - smoothed_distance
-        darkened_image = (abs(diff*edge_tightness) ** (1/edge_exponent)) * np.sign(diff)
+        darkened_image = (abs(diff * edge_tightness) ** (1 / edge_exponent)) * np.sign(diff)
         darkened_image = np.clip(darkened_image, 0, 1)
         darkened_image = (darkened_image * 255).astype(np.uint8)
 
@@ -185,7 +185,7 @@ class FadeMaskEdges:
 
         output_image = binary_image - darkened_image  # darken original image
         output_image = opencv2tensor(output_image)
-        return (output_image, )
+        return (output_image,)
 
 
 # endregion
@@ -528,7 +528,7 @@ class Contours:
             self.retrieval_modes_map[retrieval_mode],
             self.approximation_modes_map[approximation_mode])
 
-        return (contours, contours, hierarchy, )
+        return (contours, contours, hierarchy,)
 
 
 class DrawContours:
@@ -560,7 +560,6 @@ class DrawContours:
     CATEGORY = "Bmad/CV/Contour"
 
     def draw(self, image, contours, index_to_draw, color, thickness):
-
         background = tensor2opencv(image)
 
         um_image = cv.UMat(background)
@@ -659,7 +658,6 @@ class FilterContour:
         if len(contours) == 0:
             print("Contour list is empty")
             return ([[]], contours)
-
 
         # region prepare inputs
         if image is not None:
@@ -780,7 +778,7 @@ class FilterContour:
         }, {})
 
         ret = self.return_modes_map[select](contours, lambda c: fitness(c, image, aux_contour))
-        return (ret[0], ret, )
+        return (ret[0], ret,)
 
 
 class ContourToMask:
@@ -1319,7 +1317,7 @@ class DistanceTransform:
             self.distance_types_map[distance_type],
             self.mask_sizes_map[mask_size])
         distance_transform = opencv2tensor(distance_transform)
-        return (distance_transform, )
+        return (distance_transform,)
 
 
 # TODO maybe add GainDivision
@@ -1444,7 +1442,7 @@ class ColorCustomDictionary:
         return {"required": {
             "color_names": ("STRING", {"default": ""}),
             "colors": ("COLOR", {"default": ""})
-            }
+        }
         }
 
     RETURN_TYPES = ("COLOR_DICT",)
@@ -1506,7 +1504,7 @@ class SampleColorHSV:
             "sampling_seed": ("INT", {"default": 0, "min": 0, "max": sys.maxsize, "step": 1})
         }}
 
-    RETURN_TYPES = ("HSV_SAMPLES", )
+    RETURN_TYPES = ("HSV_SAMPLES",)
     FUNCTION = "sample"
     CATEGORY = "Bmad/CV/Color A."
 
@@ -1523,7 +1521,7 @@ class SampleColorHSV:
         # only convert samples to HSV
         sample_pixels_hsv = cv.cvtColor(sample_pixels, cv.COLOR_RGB2HSV)
         samples_object = HSV_Samples(sample_pixels_hsv[0, :, :])
-        return (samples_object, )
+        return (samples_object,)
 
 
 class ColorToHSVColor:
@@ -1808,20 +1806,20 @@ v_quant2(0,1).interpolate(.5, [0, 255]).scale_by_constant(50) if 2 < v_median < 
 # endregion
 
 
-#region transforms
+# region transforms
 
 
 class Remap:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "src": ("IMAGE", ),
+            "src": ("IMAGE",),
             "remap": ("REMAP", {"forceInput": True}),
             "interpolation": (interpolation_types, {"default": interpolation_types[2]}),
-            },
+        },
             "optional": {
-                "dst": ("IMAGE", ),  # each remaps sets this if used?
-                "src_mask": ("MASK", ),
+                "dst": ("IMAGE",),  # each remaps sets this if used?
+                "src_mask": ("MASK",),
             }
         }
 
@@ -1835,11 +1833,20 @@ class Remap:
             dst = tensor2opencv(dst)
         func = remap["func"]
         xargs = remap["xargs"]
-        blank_src = np.ones(src.shape[:2]) * 255 if src_mask is None else tensor2opencv(src_mask, 1)
+        # if src_mask is not defined set it to a blank canvas; otherwise, just unwrap it
+        src_mask = np.ones(src.shape[:2]) * 255 if src_mask is None else tensor2opencv(src_mask, 1)
 
-        xs, ys, bb = func(src, *xargs)
-        remap_img = cv.remap(src, xs, ys, interpolation_types_map[interpolation])
-        mask = cv.remap(blank_src, xs, ys, interpolation_types_map[interpolation])
+        if "custom" not in remap.keys():
+            # generic application, using cv.remap
+            xs, ys, bb = func(src, *xargs)
+            remap_img = cv.remap(src, xs, ys, interpolation_types_map[interpolation])
+            mask = cv.remap(src_mask, xs, ys, interpolation_types_map[interpolation])
+        else:
+            # non-generic application; replaces cv.remap w/ some other function.
+            # so far only for user provided homography,
+            #  to avoid a separate node, since technically it is also a remap and also uses the interpolation argument.
+            custom_data = func(src, *xargs)
+            remap_img, mask, bb = remap["custom"](custom_data, src, interpolation_types_map[interpolation], src_mask)
 
         if bb is not None:
             new_img = np.zeros_like(dst)
@@ -1849,7 +1856,7 @@ class Remap:
             new_img[bb[1]:bb[3], bb[0]:bb[2]] = mask
             mask = new_img
 
-        return (opencv2tensor(remap_img) , opencv2tensor(mask))
+        return (opencv2tensor(remap_img), opencv2tensor(mask))
 
 
 class RemapBase(ABC):
@@ -1864,14 +1871,14 @@ class InnerCylinderRemap(RemapBase):
         return {"required": {
             "fov": ("INT", {"default": 90, "min": 1, "max": 179}),
             "swap_xy": ("BOOLEAN", {"default": False}),
-            }
+        }
         }
 
     def send_remap(self, fov, swap_xy):
         from .remap_functions import remap_inner_cylinder
         return ({
-            "func": remap_inner_cylinder,
-            "xargs": [fov, swap_xy]
+                    "func": remap_inner_cylinder,
+                    "xargs": [fov, swap_xy]
                 },)
 
 
@@ -1881,14 +1888,14 @@ class OuterCylinderRemap(RemapBase):
         return {"required": {
             "fov": ("INT", {"default": 90, "min": 1, "max": 179}),
             "swap_xy": ("BOOLEAN", {"default": False}),
-            }
+        }
         }
 
     def send_remap(self, fov, swap_xy):
         from .remap_functions import remap_outer_cylinder
         return ({
-            "func": remap_outer_cylinder,
-            "xargs": [fov, swap_xy]
+                    "func": remap_outer_cylinder,
+                    "xargs": [fov, swap_xy]
                 },)
 
 
@@ -1896,19 +1903,54 @@ class RemapInsideParabolas(RemapBase):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "dst_mask_with_2_parabolas": ("MASK", ),
-            }
+            "dst_mask_with_2_parabolas": ("MASK",),
+        }
         }
 
     def send_remap(self, dst_mask_with_2_parabolas):
         from .remap_functions import remap_inside_parabolas
         return ({
-            "func": remap_inside_parabolas,
-            "xargs": [tensor2opencv(dst_mask_with_2_parabolas, 1)]
+                    "func": remap_inside_parabolas,
+                    "xargs": [tensor2opencv(dst_mask_with_2_parabolas, 1)]
                 },)
 
 
-#endregion
+class RemapQuadrilateral(RemapBase):
+    from .remap_functions import quad_remap_methods_map
+
+    modes_list = list(quad_remap_methods_map.keys())
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "dst_mask_with_4_points": ("MASK",),
+            "mode": (s.modes_list, {"default": s.modes_list[0]}),
+        }
+        }
+
+    @staticmethod
+    def homography(custom_data, src, interpolation, mask=None):
+        h_matrix, bb = custom_data
+        bb_width, bb_height = bb[2]-bb[0], bb[3]-bb[1]
+        ret = cv.warpPerspective(src, h_matrix, (bb_width, bb_height), flags=interpolation,
+                                 borderMode=cv.BORDER_CONSTANT)
+        if mask is not None:
+            mask = cv.warpPerspective(mask, h_matrix, (bb_width, bb_height), flags=interpolation,
+                                      borderMode=cv.BORDER_CONSTANT)
+        return ret, mask, bb
+
+    def send_remap(self, dst_mask_with_4_points, mode):
+        from .remap_functions import remap_quadrilateral
+        remap_data = {
+            "func": remap_quadrilateral,
+            "xargs": [tensor2opencv(dst_mask_with_4_points, 1), mode]
+        }
+        if mode == "HOMOGRAPHY":
+            remap_data["custom"] = RemapQuadrilateral.homography
+        return (remap_data,)
+
+
+# endregion
 
 
 NODE_CLASS_MAPPINGS = {
@@ -1959,4 +2001,5 @@ NODE_CLASS_MAPPINGS = {
     "InnerCylinder (remap)": InnerCylinderRemap,
     "OuterCylinder (remap)": OuterCylinderRemap,
     "RemapInsideParabolas (remap)": RemapInsideParabolas,
+    "RemapQuadrilateral (remap)": RemapQuadrilateral  # TODO remove redundant naming
 }

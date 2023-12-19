@@ -111,6 +111,8 @@ def remap_outer_cylinder(src, fov=90, swap_xy=False):
         return final_point[0], final_point[1], None
 
 
+# region remap parabolas
+
 def get_quadratic_curve_coeffs(p0, p1, p2):
     """
     DEPRECATED -> currently replaced with np.polyfit using additional points
@@ -133,10 +135,10 @@ def find_endpoints(skeleton):
     @param skeleton: binary image with values of 0 and 255 that contains the morphological skeleton
     """
     kernel = np.array(
-        [[1, 1,  1],
+        [[1, 1, 1],
          [1, 10, 1],
-         [1, 1,  1]])
-    skeleton = cv.filter2D(skeleton/255, -1, kernel)
+         [1, 1, 1]])
+    skeleton = cv.filter2D(skeleton / 255, -1, kernel)
     indices = np.nonzero(skeleton == 11)
     return list(zip(indices[1], indices[0]))
 
@@ -148,9 +150,9 @@ def validate_parabolas(lines, endpoints):
         1: data might work using other orientation
         2: data won't work, some lines did not match at least two endpoints
     """
-    LEEWAY = 8**2  # given as the squared number of pixels
+    LEEWAY = 8 ** 2  # given as the squared number of pixels
     for cnt in lines:
-        cnt_endpoints = [point for point in endpoints if any(np.sum((point-cnt)**2, 1) <= LEEWAY)]
+        cnt_endpoints = [point for point in endpoints if any(np.sum((point - cnt) ** 2, 1) <= LEEWAY)]
 
         # remove endpoints from list, so that there are less checks in the next line
         endpoints = [point for point in endpoints if point not in cnt_endpoints]
@@ -163,7 +165,8 @@ def validate_parabolas(lines, endpoints):
         if left_endpoint == right_endpoint:
             return 1  # if they have the same x there is no need to check other points in the next check
 
-        if any(not(left_endpoint[0] < point[0] < right_endpoint[0]) for point in cnt if tuple(point) not in cnt_endpoints):
+        if any(not (left_endpoint[0] < point[0] < right_endpoint[0]) for point in cnt if
+               tuple(point) not in cnt_endpoints):
             return 1  # can't be defined as a function, but may work in another orientation
     return 0  # looks fine
 
@@ -174,6 +177,7 @@ def get_knee_point(endpoints, line_points):
     @param line_points: ...
     @return: the knee point of the given line
     """
+
     def angle_at_p(e1, p, e2):
         """
         angle between vector starting at point "p" and ending at "e1" (first endpoint) and
@@ -202,7 +206,7 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
     @return: @return: x and y mappings ( to the original image pixels ) and roi bounding box coordinates
     """
     import skimage
-    ret, roi_points_img = cv.threshold(roi_img, 127, 255, cv.THRESH_BINARY) # ensure maximum value is 255
+    ret, roi_points_img = cv.threshold(roi_img, 127, 255, cv.THRESH_BINARY)  # ensure maximum value is 255
     skeleton = skimage.img_as_ubyte(skimage.morphology.skeletonize(roi_img))
     endpoints = find_endpoints(skeleton)
 
@@ -210,7 +214,7 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
     contours, _ = cv.findContours(skeleton, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
 
     if len(contours) != 2:
-        raise(f"Parabola Remap requires exactly 2 drawn lines, however it obtained {len(contours)} contours.")
+        raise (f"Parabola Remap requires exactly 2 drawn lines, however it obtained {len(contours)} contours.")
 
     # it is not a closed contour, but it should be easier to get the endpoints this way
     # the endpoints should be in the polyline to validate the input in the next step
@@ -218,8 +222,8 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
 
     match validate_parabolas(polylines, endpoints):
         case 2:
-            raise("Couldn't match two endpoints to one of the contours."
-                  "It may be the case that the parabolas are too flat.")
+            raise ("Couldn't match two endpoints to one of the contours."
+                   "It may be the case that the parabolas are too flat.")
         case 1:  # current orientation won't work
             if not recalled:  # shouldn't get stuck, if equal proceeds; but will use a safeguard against potential oversights!
                 xs, ys, bb = remap_inside_parabolas(cv.rotate(src, cv.ROTATE_90_CLOCKWISE)
@@ -239,7 +243,10 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
     # get upper and lower bb leeway
     lower_limit_leeway = max(bottom_parabola, key=lambda c: c[1])[1] - min(bottom_parabola, key=lambda c: c[1])[1]
     upper_limit_leeway = max(top_parabola, key=lambda c: c[1])[1] - min(top_parabola, key=lambda c: c[1])[1]
-    def all_points(): return itertools.chain(polylines[0], polylines[1])
+
+    def all_points():
+        return itertools.chain(polylines[0], polylines[1])
+
     bb = [
         int(min([p[0] for p in all_points()]))
         , int(min([p[1] for p in all_points()]) - upper_limit_leeway)
@@ -316,3 +323,212 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
     xs = (xs_norm * src.shape[1]).astype(np.float32)
 
     return xs, ys, bb
+
+
+# endregion remap parabolas
+
+
+# region remap quadrilateral
+
+
+def compute_homography(bottom_left_corner, bottom_right_corner, origin, src, upper_left_corner, upper_right_corner):
+    src_pts = [[0, 0], [src.shape[1], 0], [0, src.shape[0]], [src.shape[1], src.shape[0]]]
+    dst_pts = [upper_left_corner, upper_right_corner, bottom_left_corner, bottom_right_corner]
+    src_pts, dst_pts = np.array(src_pts).astype(np.float32), np.array(dst_pts).astype(np.float32)
+    dst_pts -= origin
+    h_matrix = cv.getPerspectiveTransform(src_pts, dst_pts)
+    return h_matrix
+
+
+def remap_quadrilateral_edge_pairs_interpolation(
+        xs, ys,
+        upper_left_corner, upper_right_corner,
+        bottom_left_corner, bottom_right_corner,
+):
+    """
+    Imagine a line that is the weighted average of 2 edges, x-wise, or y-wise.
+    The weight is x / width ( or y / height ).
+
+    If no edge is parallel these lines follow 2 different vanishing points,
+     but the mapped image doesn't shrink according to these!
+
+    A bit funky; Not sure if it could be of use... but it is easy to implement.
+    """
+
+    def compute_m(pt1, pt2, limit_m=None):
+        """
+        Slope of the line
+        @param pt1: a point on the line
+        @param pt2: another point on the line
+        @param limit_m: x's are equal, return this instead of m; if not set raise an exception.
+        @return:
+        """
+        if pt1[0] == pt2[0]:
+            if limit_m is None:
+                raise ("invalid input; adjacent points with equal x!")  # this should never happen if input is valid!
+            else:
+                return limit_m
+
+        pt1_to_pt2 = np.array(pt2) - np.array(pt1)
+        return pt1_to_pt2[1] / pt1_to_pt2[0]
+
+    def compute_b(pt, m):
+        """
+        @param pt: a point on the line
+        @param m: slope of the line
+        @return: Y value at x = 0
+        """
+        return pt[1] - m * pt[0]
+
+    m12 = compute_m(upper_left_corner, upper_right_corner)
+    m34 = compute_m(bottom_left_corner, bottom_right_corner)
+    b12 = compute_b(upper_left_corner, m12)
+    b34 = compute_b(bottom_left_corner, m34)
+
+    def compute_norm_ys(xs, ys):
+        ws = (ys - m12 * xs - b12) / ((m34 - m12) * xs + b34 - b12)
+        ws[(ws > 1) | (ws < 0) | (np.isnan(ws))] = -10  # clear bounds
+        return ws
+
+    def compute_xs_norm(xs, ws, ys):
+        bb_height2 = ys.shape[0] ** 2
+        m13 = compute_m(upper_left_corner, bottom_left_corner, bb_height2)
+        m24 = compute_m(upper_right_corner, bottom_right_corner, bb_height2)
+        b13 = compute_b(upper_left_corner, m13)
+        b24 = compute_b(upper_right_corner, m24)
+
+        # why not just compute ws for X?
+        # should work exactly the same
+
+        xs_os = -((b34 - b12) * ws - b13 + b12) / ((m34 - m12) * ws - m13 + m12)
+        xs_es = -((b34 - b12) * ws - b24 + b12) / ((m34 - m12) * ws - m24 + m12)
+        ys_os = m13 * xs_os + b13
+        ys_es = m24 * xs_es + b24
+
+        xs_lens = np.sqrt((ys_es - ys_os) ** 2 + (xs_es - xs_os) ** 2)
+        xs_minus_xs_os = xs - xs_os
+        xs_norms = np.sign(xs_minus_xs_os) * np.sqrt((ys - ys_os) ** 2 + xs_minus_xs_os ** 2) / xs_lens
+        # notice that np.sign is used to address out of bounds coordinates
+        xs_norms[(xs_norms > 1) | (xs_norms < 0) | (np.isnan(xs_norms))] = -10  # clear bounds
+        return xs_norms
+
+    ys_norm = compute_norm_ys(xs, ys)
+    xs_norm = compute_xs_norm(xs, ys_norm, ys)
+
+    return xs_norm, ys_norm
+
+
+def remap_quadrilateral_lengthwise(
+        xs, ys,
+        upper_left_corner, upper_right_corner,
+        bottom_left_corner, bottom_right_corner,
+):
+    """
+    Imagine a line that connects 2 points at 2 opposite edges, at the same % of the length at each edge.
+    That % of length is : x / width ( or y / height )
+    [ implementation might be wrong, but it does appear correct in first tests ]
+    """
+
+    a_x, a_y = upper_left_corner
+    # b_x, b_y = upper_right_corner
+    c_x, c_y = bottom_left_corner
+    # d_x, d_y = bottom_right_corner
+    ab = (np.array(upper_right_corner) - np.array(upper_left_corner)).astype(np.float32)
+    cd = (np.array(bottom_right_corner) - np.array(bottom_left_corner)).astype(np.float32)
+    ab_x, ab_y = ab
+    cd_x, cd_y = cd
+
+    def compute_xs_norm(xs, ys):
+        # This is UGLY AF, my eyes burn!!!
+        #   Too tired to think about it;
+        #   so, I just copy-pasted the result from eq. system. Fingers crossed, lol ...
+        #  Can't recall if this is length-wise;
+        #   judging by the result, and since it contains a sqrt operation it seems to be...
+        #  TODO, prob a good idea to review this if I get the time... and simplify if possible...
+        return (np.sqrt(
+            (cd_x ** 2 - 2 * ab_x * cd_x + ab_x ** 2) * ys ** 2 + (
+                    ((2 * ab_x - 2 * cd_x) * cd_y + 2 * ab_y * cd_x - 2 * ab_x * ab_y) * xs +
+                    (2 * a_x * cd_x - 4 * ab_x * c_x + 2 * a_x * ab_x) * cd_y - 2 * a_y * cd_x ** 2 + (
+                            2 * ab_x * c_y + 2 * ab_y * c_x - 4 * a_x * ab_y + 2 * a_y * ab_x) * cd_x
+                    - 2 * ab_x ** 2 * c_y + 2 * ab_x * ab_y * c_x) * ys + (
+                    cd_y ** 2 - 2 * ab_y * cd_y + ab_y ** 2) * xs ** 2
+            + (-2 * a_x * cd_y ** 2 + (
+                    2 * a_y * cd_x + 2 * ab_x * c_y + 2 * ab_y * c_x + 2 * a_x * ab_y - 4 * a_y * ab_x) * cd_y + (
+                       2 * a_y * ab_y - 4 * ab_y * c_y) * cd_x
+               + 2 * ab_x * ab_y * c_y - 2 * ab_y ** 2 * c_x) * xs + a_x ** 2 * cd_y ** 2 + (
+                    -2 * a_x * a_y * cd_x - 2 * a_x * ab_x * c_y +
+                    (4 * a_y * ab_x - 2 * a_x * ab_y) * c_x) * cd_y + a_y ** 2 * cd_x ** 2 + (
+                    (4 * a_x * ab_y - 2 * a_y * ab_x) * c_y - 2 * a_y * ab_y * c_x) * cd_x +
+            ab_x ** 2 * c_y ** 2 - 2 * ab_x * ab_y * c_x * c_y + ab_y ** 2 * c_x ** 2
+        ) + (ab_x - cd_x) * ys + (cd_y - ab_y) * xs - a_x * cd_y + a_y * cd_x - ab_x * c_y + ab_y * c_x) / (
+                       2 * ab_x * cd_y - 2 * ab_y * cd_x)
+
+    def compute_ys_norm(ys, xs, px, a, ab, c, cd):
+        px = px[:, :, np.newaxis]
+        pa = a + px * ab
+        pc = c + px * cd
+
+        ly = ys - pa[:, :, 1]
+        lx = xs - pa[:, :, 0]
+
+        pp_lengths = np.linalg.norm(pa - pc, axis=2)
+        pl_lengths = np.sqrt(ly ** 2 + lx ** 2)
+
+        pl_lengths[ly <= 0] *= -1  # preserve sign in order to detect out of bounds
+        return pl_lengths / pp_lengths  # ys_norm
+
+    xs_norm = compute_xs_norm(xs, ys)
+    xs_norm[(xs_norm > 1) | (xs_norm < 0) | (np.isnan(xs_norm))] = -10  # clear out of bounds
+
+    ys_norm = compute_ys_norm(ys, xs, xs_norm, upper_left_corner, ab, bottom_left_corner, cd)
+    ys_norm[(ys_norm > 1) | (ys_norm < 0) | (np.isnan(ys_norm))] = -10  # clear out of bounds
+
+    return xs_norm, ys_norm.astype(np.float32)  # ?
+
+
+quad_remap_methods_map = {
+    "HOMOGRAPHY": None,  # does not compute xs, ys; only the homography matrix
+    "LENGTH-WISE": remap_quadrilateral_lengthwise,
+    "W-EDGE-PAIR": remap_quadrilateral_edge_pairs_interpolation
+}
+
+
+def remap_quadrilateral(src, roi_img, method):
+    contours, hierarchy = cv.findContours(roi_img, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+
+    moments = [cv.moments(c) for c in contours]
+    centers = [(int(m["m10"] / m["m00"]), int(m["m01"] / m["m00"])) for m in moments]
+
+    bb = [
+        min([c[0] for c in centers])
+        , min([c[1] for c in centers])
+        , max([c[0] for c in centers])
+        , max([c[1] for c in centers])
+    ]
+    origin = [bb[0], bb[1]]
+    bb_height = bb[3] - bb[1]
+    bb_width = bb[2] - bb[0]
+
+    # should already be ordered by y, but don't suppose this is the case
+    centers.sort(key=lambda c: c[1])
+    upper_left_corner = min(centers[:2], key=lambda c: c[0])
+    upper_right_corner = max(centers[:2], key=lambda c: c[0])
+    bottom_left_corner = min(centers[2:4], key=lambda c: c[0])
+    bottom_right_corner = max(centers[2:4], key=lambda c: c[0])
+
+    if method == "HOMOGRAPHY":
+        h_matrix = compute_homography(bottom_left_corner, bottom_right_corner, origin, src, upper_left_corner,
+                                      upper_right_corner)
+        return h_matrix, bb
+
+    xs = np.array([[x + origin[0] for x in range(bb_width)] for _ in range(bb_height)]).astype(np.float32)
+    ys = np.array([[y + origin[1] for _ in range(bb_width)] for y in range(bb_height)]).astype(np.float32)
+
+    xs_norm, ys_norm = quad_remap_methods_map[method](
+        xs, ys, upper_left_corner, upper_right_corner, bottom_left_corner, bottom_right_corner)
+
+    ys = ys_norm * src.shape[0]
+    xs = xs_norm * src.shape[1]
+    return xs, ys, bb
+
+# endregion remap quadrilateral
