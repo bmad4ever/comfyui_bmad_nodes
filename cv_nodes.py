@@ -1907,10 +1907,30 @@ class RemapInsideParabolas(RemapBase):
         }
 
     def send_remap(self, dst_mask_with_2_parabolas):
-        from .utils.remaps import remap_inside_parabolas
+        from .utils.remaps import remap_inside_parabolas_simple
         return ({
-                    "func": remap_inside_parabolas,
+                    "func": remap_inside_parabolas_simple,
                     "xargs": [tensor2opencv(dst_mask_with_2_parabolas, 1)]
+                },)
+
+
+class RemapInsideParabolasAdvanced(RemapBase):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "dst_mask_with_2_parabolas": ("MASK",),
+            "curve_wise_adjust": ("FLOAT", {"default": 1, "min": .3, "max": 2, "step": .01}),
+            "ortho_wise_adjust": ("FLOAT", {"default": 1, "min": 1, "max": 3, "step": .01}),
+            "flip_ortho": ("BOOLEAN", {"default": False})
+            }
+        }
+
+    def send_remap(self, dst_mask_with_2_parabolas, curve_wise_adjust, ortho_wise_adjust, flip_ortho):
+        from .utils.remaps import remap_inside_parabolas_advanced
+        return ({
+                    "func": remap_inside_parabolas_advanced,
+                    "xargs": [tensor2opencv(dst_mask_with_2_parabolas, 1),
+                              curve_wise_adjust, ortho_wise_adjust, flip_ortho]
                 },)
 
 
@@ -2000,5 +2020,6 @@ NODE_CLASS_MAPPINGS = {
     "InnerCylinder (remap)": InnerCylinderRemap,
     "OuterCylinder (remap)": OuterCylinderRemap,
     "RemapInsideParabolas (remap)": RemapInsideParabolas,
+    "RemapInsideParabolasAdvanced (remap)": RemapInsideParabolasAdvanced,
     "RemapQuadrilateral (remap)": RemapQuadrilateral  # TODO remove redundant naming
 }

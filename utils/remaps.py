@@ -201,6 +201,7 @@ def get_knee_point(endpoints, line_points):
 
 def remap_inside_parabolas(src, roi_img, recalled=False):
     """
+    Generic implementation applied to both simple and advanced parabola remaps.
     @param roi_points_img: dst sized mask with the 6 points annotated
     @param recalled: safeguard against infinite recursive calls.
     @return: @return: x and y mappings ( to the original image pixels ) and roi bounding box coordinates
@@ -226,11 +227,11 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
                    "It may be the case that the parabolas are too flat.")
         case 1:  # current orientation won't work
             if not recalled:  # shouldn't get stuck, if equal proceeds; but will use a safeguard against potential oversights!
-                xs, ys, bb = remap_inside_parabolas(cv.rotate(src, cv.ROTATE_90_CLOCKWISE)
+                xs, ys, bb, _ = remap_inside_parabolas(cv.rotate(src, cv.ROTATE_90_CLOCKWISE)
                                                     , cv.flip(cv.rotate(roi_points_img, cv.ROTATE_90_CLOCKWISE), 1),
                                                     True)
                 bb = (bb[1], bb[0], bb[3], bb[2])  # fix bb
-                return np.rot90(np.fliplr(ys)), np.rot90(np.fliplr(xs)), bb
+                return np.rot90(np.fliplr(ys)), np.rot90(np.fliplr(xs)), bb, True
             # -- raise(...) -- no longer raise exception:
             # it will likely result in a messy map,
             # but may also work fine on some cases.
@@ -320,10 +321,53 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
     xs_norm[np.isnan(xs_norm)] = -10
     ys_norm[np.isnan(ys_norm)] = -10
 
+    return xs_norm, ys_norm, bb, recalled
+
+
+def remap_inside_parabolas_simple(src, roi_img):
+    xs_norm, ys_norm, bb, _ = remap_inside_parabolas(src, roi_img)
+
     # convert normalized coords to picture coords
     ys = (ys_norm * src.shape[0]).astype(np.float32)
     xs = (xs_norm * src.shape[1]).astype(np.float32)
+    return xs, ys, bb
 
+
+def remap_inside_parabolas_advanced(src, roi_img, curve_adjust, ortho_adjust, flip_ortho_adj):
+    xs_norm, ys_norm, bb, swap = remap_inside_parabolas(src, roi_img)
+
+    def curve_wise_adjust(ss_norm):
+        ss_outbounds_indices = (ss_norm == -10)
+        ss_norm = ss_norm.astype(np.float32)
+        ss_norm = (ss_norm - .5) * 2
+        xs_sign = np.sign(ss_norm)
+        ss_norm = (1 - np.abs(ss_norm)) * xs_sign
+        ss_norm = np.abs(np.float_power(ss_norm, curve_adjust, dtype=complex)) * xs_sign
+        ss_norm = (1 - np.abs(ss_norm)) * xs_sign
+        ss_norm = ss_norm * .5 + .5
+        ss_norm[ss_outbounds_indices] = -10  # jic, make sure no bleeding occurs
+        return ss_norm
+
+    def ortho_wise_adjust(ss_norm):
+        ss_outbounds_indices = (ss_norm == -10)
+        if flip_ortho_adj:
+            ss_norm = 1 - ss_norm
+        ss_norm = np.abs(np.float_power(ss_norm, ortho_adjust, dtype=complex)) * np.sign(ss_norm)
+        if flip_ortho_adj:
+            ss_norm = 1 - ss_norm
+        ss_norm[ss_outbounds_indices] = -10  # jic, make sure no bleeding occurs
+        return ss_norm
+
+    if swap:
+        ys_norm = curve_wise_adjust(ys_norm)
+        xs_norm = ortho_wise_adjust(xs_norm)
+    else:
+        xs_norm = curve_wise_adjust(xs_norm)
+        ys_norm = ortho_wise_adjust(ys_norm)
+
+    # convert normalized coords to picture coords
+    ys = (ys_norm * src.shape[0]).astype(np.float32)
+    xs = (xs_norm * src.shape[1]).astype(np.float32)
     return xs, ys, bb
 
 
