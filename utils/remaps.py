@@ -294,11 +294,13 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
         full_segs_lens = arc_len(ws, leftmost_xs, rightmost_xs)
         to_point_lens = arc_len(ws, leftmost_xs, px)
 
-        # clip sections outside roi
-        to_point_lens[to_point_lens > full_segs_lens] = -10
-        to_point_lens[to_point_lens < 0] = -10
+        xsn = to_point_lens / full_segs_lens
 
-        return to_point_lens / full_segs_lens
+        # clip sections outside roi
+        xsn[to_point_lens > full_segs_lens] = -10
+        xsn[to_point_lens < 0] = -10
+
+        return xsn
 
     # endregion
 
