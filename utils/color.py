@@ -168,6 +168,8 @@ def find_complementary_color(image, color_dict, mask=None, power=2):
     if mask is not None:
         mask = mask[:, :]/255
         non_zero_count = np.count_nonzero(mask)  # compute only once and wrap within sent arg
+        #print(mask)
+        #print(len(mask[0]))
         mask = (mask, non_zero_count)
 
     for color_name, color_rgb in color_dict.items():

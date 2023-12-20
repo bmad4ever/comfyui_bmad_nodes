@@ -1,11 +1,10 @@
 import math
-from abc import ABC, abstractmethod
+from abc import ABC
 
 import cv2 as cv
-import numpy as np
 
-from .dry import *
-from .color_utils import *
+from .utils.dry import *
+from .utils.color import *
 
 # TODO these nodes return the mask, not the image with the background removed!
 #       this is somewhat misleading. Consider changing the methods names.
@@ -1875,7 +1874,7 @@ class InnerCylinderRemap(RemapBase):
         }
 
     def send_remap(self, fov, swap_xy):
-        from .remap_functions import remap_inner_cylinder
+        from .utils.remaps import remap_inner_cylinder
         return ({
                     "func": remap_inner_cylinder,
                     "xargs": [fov, swap_xy]
@@ -1892,7 +1891,7 @@ class OuterCylinderRemap(RemapBase):
         }
 
     def send_remap(self, fov, swap_xy):
-        from .remap_functions import remap_outer_cylinder
+        from .utils.remaps import remap_outer_cylinder
         return ({
                     "func": remap_outer_cylinder,
                     "xargs": [fov, swap_xy]
@@ -1908,7 +1907,7 @@ class RemapInsideParabolas(RemapBase):
         }
 
     def send_remap(self, dst_mask_with_2_parabolas):
-        from .remap_functions import remap_inside_parabolas
+        from .utils.remaps import remap_inside_parabolas
         return ({
                     "func": remap_inside_parabolas,
                     "xargs": [tensor2opencv(dst_mask_with_2_parabolas, 1)]
@@ -1916,7 +1915,7 @@ class RemapInsideParabolas(RemapBase):
 
 
 class RemapQuadrilateral(RemapBase):
-    from .remap_functions import quad_remap_methods_map
+    from .utils.remaps import quad_remap_methods_map
 
     modes_list = list(quad_remap_methods_map.keys())
 
@@ -1940,7 +1939,7 @@ class RemapQuadrilateral(RemapBase):
         return ret, mask, bb
 
     def send_remap(self, dst_mask_with_4_points, mode):
-        from .remap_functions import remap_quadrilateral
+        from .utils.remaps import remap_quadrilateral
         remap_data = {
             "func": remap_quadrilateral,
             "xargs": [tensor2opencv(dst_mask_with_4_points, 1), mode]

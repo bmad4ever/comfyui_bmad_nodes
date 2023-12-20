@@ -1,9 +1,8 @@
 import math
-from abc import ABC
 
 import nodes
-from .dry import *
-from .color_utils import ColorClip, color255_INPUT
+from .utils.dry import *
+from .utils.color import ColorClip, color255_INPUT
 
 
 class StringNode:

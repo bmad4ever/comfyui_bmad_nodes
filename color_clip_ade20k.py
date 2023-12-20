@@ -1,6 +1,6 @@
 #from gray2color.utils.vistas import *
 from gray2color.utils.ade20k import *
-from .color_utils import ColorClip
+from .utils.color import ColorClip
 
 
 # note: first pallet item is the black color, which is not relative to any label, and must be added or skipped
