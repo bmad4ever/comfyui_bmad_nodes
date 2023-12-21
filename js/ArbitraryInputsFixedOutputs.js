@@ -6,6 +6,7 @@ var mi_node_types = {
     "CLIPEncodeMultipleAdvanced": "STRING",
     "ControlNetHadamard (manual)": "IMAGE",
 
+    "ToMaskList": "MASK",
     "ToImageList": "IMAGE",
     "ToLatentList": "LATENT",
     "ToCondList": "CONDITIONING",
@@ -14,6 +15,16 @@ var mi_node_types = {
     "ToStringList": "STRING",
     "ToIntList": "INT",
     "ToFloatList": "FLOAT",
+
+    "ExtendMaskList": "MASK",
+    "ExtendImageList": "IMAGE",
+    "ExtendLatentList": "LATENT",
+    "ExtendCondList": "CONDITIONING",
+    "ExtendModelList": "MODEL",
+    "ExtendColorList": "COLOR",
+    "ExtendStringList": "STRING",
+    "ExtendIntList": "INT",
+    "ExtendFloatList": "FLOAT",
     }
 
 

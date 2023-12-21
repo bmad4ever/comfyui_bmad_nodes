@@ -758,7 +758,7 @@ class UnMakeListMeta(type):
             attrs['RETURN_TYPES'] = tuple([attrs["TYPE"].upper() for _ in range(32)])
 
         if 'CATEGORY' not in attrs:
-            attrs['CATEGORY'] = (f'Bmad/Lists',)
+            attrs['CATEGORY'] = (f'Bmad/Lists/GetAll',)
 
         attrs['FUNCTION'] = 'get_all'
         attrs['INPUT_IS_LIST'] = True
@@ -792,7 +792,7 @@ class GetSingleFromListMeta(type):
             attrs['RETURN_TYPES'] = (attrs["TYPE"].upper(),)
 
         if 'CATEGORY' not in attrs:
-            attrs['CATEGORY'] = (f'Bmad/Lists',)
+            attrs['CATEGORY'] = (f'Bmad/Lists/Get1',)
 
         attrs['FUNCTION'] = 'get_one'
         attrs['INPUT_IS_LIST'] = True
@@ -840,6 +840,9 @@ class FromListGet1Int(metaclass=GetSingleFromListMeta): TYPE = "INT"
 class FromListGet1Float(metaclass=GetSingleFromListMeta): TYPE = "FLOAT"
 
 
+# TODO could a IntBatch be of use? e.g. to fetch multiple ranges from a list
+
+
 # endregion
 
 
@@ -851,7 +854,7 @@ class MakeListMeta(type):
             attrs['RETURN_TYPES'] = (attrs["TYPE"].upper(),)
 
         if 'CATEGORY' not in attrs:
-            attrs['CATEGORY'] = (f'Bmad/Lists',)
+            attrs['CATEGORY'] = (f'Bmad/Lists/Make or Intercalate',)
 
         attrs['FUNCTION'] = 'to_list'
         attrs['OUTPUT_IS_LIST'] = (True,)
@@ -868,10 +871,29 @@ class MakeListMeta(type):
                 "inputs_len": ("INT", {"default": 2, "min": 0, "max": 32}),
             }}
 
-        attrs['to_list'] = to_list
+        if 'to_list' not in attrs:
+            attrs['to_list'] = to_list
         attrs['INPUT_TYPES'] = classmethod(INPUT_TYPES)
 
         return super().__new__(cls, name, bases, attrs)
+
+
+class ExtendListMeta(MakeListMeta):
+    def __new__(cls, name, bases, attrs):
+        def to_list(self, inputs_len, **kwargs):
+            list = []
+            for i in range(inputs_len[0]):
+                arg_name = get_arg_name_from_multiple_inputs(self.TYPE.lower(), i)
+                list.extend(kwargs[arg_name])
+            return (list,)
+
+        attrs['INPUT_IS_LIST'] = True
+        attrs['to_list'] = to_list
+        attrs['CATEGORY'] = (f'Bmad/Lists/Extend',)
+
+        return super().__new__(cls, name, bases, attrs)
+
+
 
 
 class ToMaskList(metaclass=MakeListMeta): TYPE = "MASK"
@@ -884,6 +906,16 @@ class ToStringList(metaclass=MakeListMeta): TYPE = "STRING"
 class ToIntList(metaclass=MakeListMeta): TYPE = "INT"
 class ToFloatList(metaclass=MakeListMeta): TYPE = "FLOAT"
 
+
+class ExtendMaskList(metaclass=ExtendListMeta): TYPE = "MASK"
+class ExtendImageList(metaclass=ExtendListMeta): TYPE = "IMAGE"
+class ExtendLatentList(metaclass=ExtendListMeta): TYPE = "LATENT"
+class ExtendCondList(metaclass=ExtendListMeta): TYPE = "CONDITIONING"
+class ExtendModelList(metaclass=ExtendListMeta): TYPE = "MODEL"
+class ExtendColorList(metaclass=ExtendListMeta): TYPE = "COLOR"
+class ExtendStringList(metaclass=ExtendListMeta): TYPE = "STRING"
+class ExtendIntList(metaclass=ExtendListMeta): TYPE = "INT"
+class ExtendFloatList(metaclass=ExtendListMeta): TYPE = "FLOAT"
 
 # endregion
 
@@ -950,5 +982,14 @@ NODE_CLASS_MAPPINGS = {
     "ToColorList": ToColorList,
     "ToStringList": ToStringList,
     "ToIntList": ToIntList,
-    "ToFloatList": ToFloatList
+    "ToFloatList": ToFloatList,
+    "ExtendMaskList": ExtendMaskList,
+    "ExtendImageList": ExtendImageList,
+    "ExtendLatentList": ExtendLatentList,
+    "ExtendCondList": ExtendCondList,
+    "ExtendModelList": ExtendModelList,
+    "ExtendColorList": ExtendColorList,
+    "ExtendStringList": ExtendStringList,
+    "ExtendIntList": ExtendIntList,
+    "ExtendFloatList": ExtendFloatList,
 }
