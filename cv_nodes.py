@@ -1380,10 +1380,7 @@ class MorphologicSkeletoning:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "src": ("IMAGE",),
-                #               "stop_criteria": (s.stop_criteria, {"default": s.stop_criteria[0]}),
-                #               "iteration_limit": ("INT", {"default": 12, "min": -1, "step": 1}),
-                # just use method,
+                "src": ("IMAGE",)
             },
         }
 
@@ -1393,8 +1390,9 @@ class MorphologicSkeletoning:
 
     def compute(self, src):
         from skimage.morphology import skeletonize
-        img = tensor2opencv(src)
-        skel = skeletonize(img)
+        img = tensor2opencv(src, 1)
+        _, img = cv.threshold(img, 127, 1, cv.THRESH_BINARY)  # ensure it is binary and set max value to 1.
+        skel = skeletonize(img) * 255
         img = opencv2tensor(skel)
         return (img,)
 
