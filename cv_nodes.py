@@ -68,7 +68,7 @@ class CopyMakeBorderSimple:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "make_border"
-    CATEGORY = "Bmad/CV"
+    CATEGORY = "Bmad/CV/Misc"
 
     def make_border(self, image, border_size, border_type):
         image = tensor2opencv(image, 0)
@@ -161,7 +161,7 @@ class FadeMaskEdges:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "apply"
-    CATEGORY = "Bmad/CV"
+    CATEGORY = "Bmad/CV/Misc"
 
     def apply(self, binary_image, edge_size, edge_tightness, edge_exponent, smoothing_diameter, paste_original_blacks):
         binary_image = tensor2opencv(binary_image, 1)
@@ -1970,6 +1970,95 @@ class RemapQuadrilateral(RemapBase):
 # endregion
 
 
+# region misc. ADVANCED
+
+
+class MaskOuterBlur:  # great, another "funny" name; what would you call this?
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "src": ("IMAGE",),
+                "mask": ("IMAGE",),
+                "kernel_size": ("INT", {"default": 16, "min": 2, "max": 150, "step": 2}),
+                "paste_src": ("BOOLEAN", {"default": True})
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "compute"
+    CATEGORY = "Bmad/CV/Misc"
+
+    def compute(self, src, mask, kernel_size, paste_src):
+        from comfy.model_management import is_nvidia
+
+        # setup input data
+        kernel_size += 1
+        image = tensor2opencv(src, 3)
+        mask = tensor2opencv(mask, 1)
+
+        # setup kernel ( maybe add optional input later for custom kernel? )
+        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (kernel_size, kernel_size))
+        kernel = np.where(kernel > 0, 1, 0)
+
+        #  resize mask if it's size doesn't match the image's
+        if image.shape[0:2] != mask.shape[0:2]:
+            print("MaskedOuterBlur node will resize mask to fit the image.")
+            mask = cv.resize(mask, (image.shape[1], image.shape[0]), interpolation=cv.INTER_LINEAR)
+
+        # extend image borders so that the algorithm doesn't have to take them into account
+        border_size = kernel_size // 2
+        image_extended = cv.copyMakeBorder(image, border_size, border_size, border_size, border_size, cv.BORDER_REPLICATE)
+        mask_extended = cv.copyMakeBorder(mask, border_size, border_size, border_size, border_size, cv.BORDER_REPLICATE)
+
+        # convert the image to float32
+        image_float32 = image_extended.astype('float32')
+        mask_float32 = mask_extended.astype('float32')
+
+        if is_nvidia():  # is this check legit?
+            import cupy as cp
+            from numba.cuda import get_current_device
+            from .utils.mask_outer_blur import blur_cuda
+
+            # setup cupy arrays
+            image_cupy = cp.asarray(image_float32)
+            mask_cupy = cp.asarray(mask_float32)
+            # note: don't pass extended size here; more data than needed to retrieve from gpu.
+            #       instead, rawkernel outputs the final directly with the kernel size in mind
+            #       and there is no need to crop after the computation
+            out = cp.zeros((mask.shape[0], mask.shape[1], 3), dtype=cp.float32)
+            kernel_gpu = cp.asarray(kernel)
+
+            # setup grid/block sizes
+            gpu = get_current_device()
+            w, h = mask.shape[1], mask.shape[0]
+            blockDimx, blockDimy = np.floor(np.array([w / h, h / w]) * gpu.MAX_THREADS_PER_BLOCK ** (1 / 2)).astype(
+                np.int32)
+            gridx, gridy = np.ceil(np.array([w / blockDimx, h / blockDimy])).astype(np.int32)
+
+            # run on gpu, and then fetch result as numpy array
+            blur_cuda((gridx, gridy), (blockDimx, blockDimy),
+                      (image_cupy, mask_cupy, out, kernel_gpu, kernel_size, mask_extended.shape[1], mask_extended.shape[0]))
+            result_float32 = cp.asnumpy(out)
+
+        else:  # run on cpu
+            from .utils.mask_outer_blur import blur_cpu
+            result_float32 = blur_cpu(image_float32, mask_float32, kernel, kernel_size, mask_extended.shape[1], mask_extended.shape[0])
+            # remove added borders ( this is not required in gpu version;
+            #                        only done here to avoid computing two sets of coordinates for every pixel )
+            result_float32 = result_float32[border_size:-border_size, border_size:-border_size, :]
+
+        if paste_src:  # paste src onto result using mask
+            indices = mask > 0
+            result_float32[indices, :] = image[indices, :]
+
+        result = opencv2tensor(result_float32)
+        return (result, )
+
+
+# endregion
+
+
 NODE_CLASS_MAPPINGS = {
     "ConvertImg": ConvertImg,
     "CopyMakeBorder": CopyMakeBorderSimple,
@@ -2019,5 +2108,7 @@ NODE_CLASS_MAPPINGS = {
     "OuterCylinder (remap)": OuterCylinderRemap,
     "RemapInsideParabolas (remap)": RemapInsideParabolas,
     "RemapInsideParabolasAdvanced (remap)": RemapInsideParabolasAdvanced,
-    "RemapQuadrilateral (remap)": RemapQuadrilateral  # TODO remove redundant naming
+    "RemapQuadrilateral (remap)": RemapQuadrilateral,  # TODO remove redundant naming
+
+    "MaskOuterBlur": MaskOuterBlur
 }
