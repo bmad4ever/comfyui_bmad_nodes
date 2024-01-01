@@ -800,7 +800,6 @@ class GetSingleFromListMeta(type):
         def get_one(self, list, index):
             index = index[0]
             index = index % len(list)
-            print(index)
             return (list[index],)
 
         def INPUT_TYPES(cls):
