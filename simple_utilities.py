@@ -806,7 +806,7 @@ class GetSingleFromListMeta(type):
             return {
                 "required": {
                     "list": (attrs["TYPE"].upper(), {"forceInput": True}),
-                    "index": ("INT", {"default": 0, "min": 0})
+                    "index": ("INT", {"default": 0})
                 }
             }
 
