@@ -1810,13 +1810,13 @@ class Remap:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "src": ("IMAGE",),
             "remap": ("REMAP", {"forceInput": True}),
+            "src": ("IMAGE",),
             "interpolation": (interpolation_types, {"default": interpolation_types[2]}),
         },
             "optional": {
-                "dst": ("IMAGE",),  # each remaps sets this if used?
                 "src_mask": ("MASK",),
+                "output_with_alpha": ("BOOLEAN", {"default": False})
             }
         }
 
@@ -1824,10 +1824,9 @@ class Remap:
     FUNCTION = "transform"
     CATEGORY = "Bmad/CV/Transform"
 
-    def transform(self, src, remap, interpolation, dst=None, src_mask=None):
+    def transform(self, src, remap, interpolation, src_mask=None, output_with_alpha=False):
         src = tensor2opencv(src)
-        if dst is not None:
-            dst = tensor2opencv(dst)
+        dst_dims = remap["dims"] if "dims" in remap else src.shape[:2]
         func = remap["func"]
         xargs = remap["xargs"]
         # if src_mask is not defined set it to a blank canvas; otherwise, just unwrap it
@@ -1846,12 +1845,18 @@ class Remap:
             remap_img, mask, bb = remap["custom"](custom_data, src, interpolation_types_map[interpolation], src_mask)
 
         if bb is not None:
-            new_img = np.zeros_like(dst)
+            new_img = np.zeros((*dst_dims, 3))  # hope width and height are not swapped
             new_img[bb[1]:bb[3], bb[0]:bb[2], :] = remap_img
             remap_img = new_img
-            new_img = np.zeros(dst.shape[:2])
+            new_img = np.zeros(dst_dims)  # was working previously without the batch dim; unsure if really needed
             new_img[bb[1]:bb[3], bb[0]:bb[2]] = mask
             mask = new_img
+
+        if output_with_alpha:
+            new_img = np.zeros((*dst_dims, 4))
+            new_img[:, :, 0:3] = remap_img[:, :, :]
+            new_img[:, :, 3] = mask[:, :]
+            remap_img = new_img
 
         return (opencv2tensor(remap_img), opencv2tensor(mask))
 
@@ -1860,6 +1865,11 @@ class RemapBase(ABC):
     RETURN_TYPES = ("REMAP",)
     FUNCTION = "send_remap"
     CATEGORY = "Bmad/CV/Transform"
+
+    @staticmethod
+    def get_dims(mask):
+        _, h, w = mask.shape
+        return h, w
 
 
 class InnerCylinderRemap(RemapBase):
@@ -1908,7 +1918,8 @@ class RemapInsideParabolas(RemapBase):
         from .utils.remaps import remap_inside_parabolas_simple
         return ({
                     "func": remap_inside_parabolas_simple,
-                    "xargs": [tensor2opencv(dst_mask_with_2_parabolas, 1)]
+                    "xargs": [tensor2opencv(dst_mask_with_2_parabolas, 1)],
+                    "dims": RemapBase.get_dims(dst_mask_with_2_parabolas)
                 },)
 
 
@@ -1920,7 +1931,7 @@ class RemapInsideParabolasAdvanced(RemapBase):
             "curve_wise_adjust": ("FLOAT", {"default": 1, "min": .3, "max": 2, "step": .01}),
             "ortho_wise_adjust": ("FLOAT", {"default": 1, "min": 1, "max": 3, "step": .01}),
             "flip_ortho": ("BOOLEAN", {"default": False})
-            }
+        }
         }
 
     def send_remap(self, dst_mask_with_2_parabolas, curve_wise_adjust, ortho_wise_adjust, flip_ortho):
@@ -1928,7 +1939,8 @@ class RemapInsideParabolasAdvanced(RemapBase):
         return ({
                     "func": remap_inside_parabolas_advanced,
                     "xargs": [tensor2opencv(dst_mask_with_2_parabolas, 1),
-                              curve_wise_adjust, ortho_wise_adjust, flip_ortho]
+                              curve_wise_adjust, ortho_wise_adjust, flip_ortho],
+                    "dims": RemapBase.get_dims(dst_mask_with_2_parabolas)
                 },)
 
 
@@ -1948,7 +1960,7 @@ class RemapQuadrilateral(RemapBase):
     @staticmethod
     def homography(custom_data, src, interpolation, mask=None):
         h_matrix, bb = custom_data
-        bb_width, bb_height = bb[2]-bb[0], bb[3]-bb[1]
+        bb_width, bb_height = bb[2] - bb[0], bb[3] - bb[1]
         ret = cv.warpPerspective(src, h_matrix, (bb_width, bb_height), flags=interpolation,
                                  borderMode=cv.BORDER_CONSTANT)
         if mask is not None:
@@ -1960,7 +1972,8 @@ class RemapQuadrilateral(RemapBase):
         from .utils.remaps import remap_quadrilateral
         remap_data = {
             "func": remap_quadrilateral,
-            "xargs": [tensor2opencv(dst_mask_with_4_points, 1), mode]
+            "xargs": [tensor2opencv(dst_mask_with_4_points, 1), mode],
+            "dims": RemapBase.get_dims(dst_mask_with_4_points)
         }
         if mode == "HOMOGRAPHY":
             remap_data["custom"] = RemapQuadrilateral.homography
@@ -2008,7 +2021,8 @@ class MaskOuterBlur:  # great, another "funny" name; what would you call this?
 
         # extend image borders so that the algorithm doesn't have to take them into account
         border_size = kernel_size // 2
-        image_extended = cv.copyMakeBorder(image, border_size, border_size, border_size, border_size, cv.BORDER_REPLICATE)
+        image_extended = cv.copyMakeBorder(image, border_size, border_size, border_size, border_size,
+                                           cv.BORDER_REPLICATE)
         mask_extended = cv.copyMakeBorder(mask, border_size, border_size, border_size, border_size, cv.BORDER_REPLICATE)
 
         # convert the image to float32
@@ -2038,12 +2052,14 @@ class MaskOuterBlur:  # great, another "funny" name; what would you call this?
 
             # run on gpu, and then fetch result as numpy array
             blur_cuda((gridx, gridy), (blockDimx, blockDimy),
-                      (image_cupy, mask_cupy, out, kernel_gpu, kernel_size, mask_extended.shape[1], mask_extended.shape[0]))
+                      (image_cupy, mask_cupy, out, kernel_gpu, kernel_size, mask_extended.shape[1],
+                       mask_extended.shape[0]))
             result_float32 = cp.asnumpy(out)
 
         else:  # run on cpu
             from .utils.mask_outer_blur import blur_cpu
-            result_float32 = blur_cpu(image_float32, mask_float32, kernel, kernel_size, mask_extended.shape[1], mask_extended.shape[0])
+            result_float32 = blur_cpu(image_float32, mask_float32, kernel, kernel_size, mask_extended.shape[1],
+                                      mask_extended.shape[0])
             # remove added borders ( this is not required in gpu version;
             #                        only done here to avoid computing two sets of coordinates for every pixel )
             result_float32 = result_float32[border_size:-border_size, border_size:-border_size, :]
@@ -2053,7 +2069,7 @@ class MaskOuterBlur:  # great, another "funny" name; what would you call this?
             result_float32[indices, :] = image[indices, :]
 
         result = opencv2tensor(result_float32)
-        return (result, )
+        return (result,)
 
 
 # endregion
@@ -2104,11 +2120,11 @@ NODE_CLASS_MAPPINGS = {
     "BuildColorRangeAdvanced (hsv)": BuildColorRangeHSVAdvanced,
 
     "Remap": Remap,
-    "InnerCylinder (remap)": InnerCylinderRemap,
-    "OuterCylinder (remap)": OuterCylinderRemap,
-    "RemapInsideParabolas (remap)": RemapInsideParabolas,
-    "RemapInsideParabolasAdvanced (remap)": RemapInsideParabolasAdvanced,
-    "RemapQuadrilateral (remap)": RemapQuadrilateral,  # TODO remove redundant naming
+    "RemapToInnerCylinder": InnerCylinderRemap,
+    "RemapToOuterCylinder": OuterCylinderRemap,
+    "RemapInsideParabolas": RemapInsideParabolas,
+    "RemapInsideParabolasAdvanced": RemapInsideParabolasAdvanced,
+    "RemapToQuadrilateral": RemapQuadrilateral,
 
     "MaskOuterBlur": MaskOuterBlur
 }
