@@ -758,7 +758,7 @@ class UnMakeListMeta(type):
             attrs['RETURN_TYPES'] = tuple([attrs["TYPE"].upper() for _ in range(32)])
 
         if 'CATEGORY' not in attrs:
-            attrs['CATEGORY'] = (f'Bmad/Lists/GetAll',)
+            attrs['CATEGORY'] = 'Bmad/Lists/GetAll'
 
         attrs['FUNCTION'] = 'get_all'
         attrs['INPUT_IS_LIST'] = True
@@ -792,7 +792,7 @@ class GetSingleFromListMeta(type):
             attrs['RETURN_TYPES'] = (attrs["TYPE"].upper(),)
 
         if 'CATEGORY' not in attrs:
-            attrs['CATEGORY'] = (f'Bmad/Lists/Get1',)
+            attrs['CATEGORY'] = 'Bmad/Lists/Get1'
 
         attrs['FUNCTION'] = 'get_one'
         attrs['INPUT_IS_LIST'] = True
@@ -854,7 +854,7 @@ class MakeListMeta(type):
             attrs['RETURN_TYPES'] = (attrs["TYPE"].upper(),)
 
         if 'CATEGORY' not in attrs:
-            attrs['CATEGORY'] = (f'Bmad/Lists/Make or Intercalate',)
+            attrs['CATEGORY'] = 'Bmad/Lists/Make or Intercalate'
 
         attrs['FUNCTION'] = 'to_list'
         attrs['OUTPUT_IS_LIST'] = (True,)
@@ -889,7 +889,7 @@ class ExtendListMeta(MakeListMeta):
 
         attrs['INPUT_IS_LIST'] = True
         attrs['to_list'] = to_list
-        attrs['CATEGORY'] = (f'Bmad/Lists/Extend',)
+        attrs['CATEGORY'] = 'Bmad/Lists/Extend'
 
         return super().__new__(cls, name, bases, attrs)
 
