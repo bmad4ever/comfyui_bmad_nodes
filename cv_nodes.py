@@ -1980,6 +1980,33 @@ class RemapQuadrilateral(RemapBase):
         return (remap_data,)
 
 
+class RemapFromQuadrilateral(RemapBase):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "src_mask_with_4_points": ("MASK",),
+            #"mode": (s.modes_list, {"default": s.modes_list[0]}),
+            "width": ("INT", {"default": 512, "min": 16, "max": 4096}),
+            "height": ("INT", {"default": 512, "min": 16, "max": 4096}),
+        }
+        }
+
+    @staticmethod
+    def homography(*args):
+        ret, mask, bb = RemapQuadrilateral.homography(*args)
+        return ret, mask, None
+
+    def send_remap(self, src_mask_with_4_points, width, height):
+        from .utils.remaps import remap_from_quadrilateral
+        remap_data = {
+            "func": remap_from_quadrilateral,
+            "xargs": [tensor2opencv(src_mask_with_4_points, 1), width, height],
+            "dims": (width, height),  # seems kinda redundant, not sure if should refactor
+            "custom": RemapFromQuadrilateral.homography
+        }
+        return (remap_data,)
+
+
 # endregion
 
 
@@ -2125,6 +2152,7 @@ NODE_CLASS_MAPPINGS = {
     "RemapInsideParabolas": RemapInsideParabolas,
     "RemapInsideParabolasAdvanced": RemapInsideParabolasAdvanced,
     "RemapToQuadrilateral": RemapQuadrilateral,
+    "RemapFromQuadrilateral (homography)": RemapFromQuadrilateral,
 
     "MaskOuterBlur": MaskOuterBlur
 }

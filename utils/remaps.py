@@ -2,6 +2,7 @@ import itertools
 
 import numpy as np
 import cv2 as cv
+from numpy import ndarray
 
 
 def xy_pixel_indexes(img, swap=False):
@@ -228,8 +229,8 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
         case 1:  # current orientation won't work
             if not recalled:  # shouldn't get stuck, if equal proceeds; but will use a safeguard against potential oversights!
                 xs, ys, bb, _ = remap_inside_parabolas(cv.rotate(src, cv.ROTATE_90_CLOCKWISE)
-                                                    , cv.flip(cv.rotate(roi_points_img, cv.ROTATE_90_CLOCKWISE), 1),
-                                                    True)
+                                                       , cv.flip(cv.rotate(roi_points_img, cv.ROTATE_90_CLOCKWISE), 1),
+                                                       True)
                 bb = (bb[1], bb[0], bb[3], bb[2])  # fix bb
                 return np.rot90(np.fliplr(ys)), np.rot90(np.fliplr(xs)), bb, True
             # -- raise(...) -- no longer raise exception:
@@ -377,10 +378,14 @@ def remap_inside_parabolas_advanced(src, roi_img, curve_adjust, ortho_adjust, fl
 # region remap quadrilateral
 
 
-def compute_homography(bottom_left_corner, bottom_right_corner, origin, src, upper_left_corner, upper_right_corner):
+def compute_homography(
+        src, origin, sorted_dst_pts
+        # upper_left_corner, upper_right_corner, bottom_left_corner, bottom_right_corner,
+        # bottom_left_corner, bottom_right_corner, origin, src, upper_left_corner, upper_right_corner
+):
     src_pts = [[0, 0], [src.shape[1], 0], [0, src.shape[0]], [src.shape[1], src.shape[0]]]
-    dst_pts = [upper_left_corner, upper_right_corner, bottom_left_corner, bottom_right_corner]
-    src_pts, dst_pts = np.array(src_pts).astype(np.float32), np.array(dst_pts).astype(np.float32)
+    # dst_pts = [upper_left_corner, upper_right_corner, bottom_left_corner, bottom_right_corner]
+    src_pts, dst_pts = np.array(src_pts).astype(np.float32), np.array(sorted_dst_pts).astype(np.float32)
     dst_pts -= origin
     h_matrix = cv.getPerspectiveTransform(src_pts, dst_pts)
     return h_matrix
@@ -539,42 +544,73 @@ quad_remap_methods_map = {
 }
 
 
-def remap_quadrilateral(src, roi_img, method):
-    contours, hierarchy = cv.findContours(roi_img, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
-
-    moments = [cv.moments(c) for c in contours]
-    centers = [(int(m["m10"] / m["m00"]), int(m["m01"] / m["m00"])) for m in moments]
-
-    bb = [
-        min([c[0] for c in centers])
-        , min([c[1] for c in centers])
-        , max([c[0] for c in centers])
-        , max([c[1] for c in centers])
-    ]
-    origin = [bb[0], bb[1]]
-    bb_height = bb[3] - bb[1]
-    bb_width = bb[2] - bb[0]
-
-    # should already be ordered by y, but don't suppose this is the case
-    centers.sort(key=lambda c: c[1])
-    upper_left_corner = min(centers[:2], key=lambda c: c[0])
-    upper_right_corner = max(centers[:2], key=lambda c: c[0])
-    bottom_left_corner = min(centers[2:4], key=lambda c: c[0])
-    bottom_right_corner = max(centers[2:4], key=lambda c: c[0])
+def remap_quadrilateral(src: ndarray, roi_img: ndarray, method: str) -> tuple[ndarray, ndarray, list[int]] | tuple[ndarray, list[int]]:
+    quad_corners = get_quad_corners(roi_img)
+    bb, bb_width, bb_height, origin = get_quad_bounding_box(quad_corners)
+    quad_corners = get_ordered_corners(quad_corners)
 
     if method == "HOMOGRAPHY":
-        h_matrix = compute_homography(bottom_left_corner, bottom_right_corner, origin, src, upper_left_corner,
-                                      upper_right_corner)
+        h_matrix = compute_homography(src, origin, quad_corners)
         return h_matrix, bb
 
     xs = np.array([[x + origin[0] for x in range(bb_width)] for _ in range(bb_height)]).astype(np.float32)
     ys = np.array([[y + origin[1] for _ in range(bb_width)] for y in range(bb_height)]).astype(np.float32)
 
-    xs_norm, ys_norm = quad_remap_methods_map[method](
-        xs, ys, upper_left_corner, upper_right_corner, bottom_left_corner, bottom_right_corner)
+    xs_norm, ys_norm = quad_remap_methods_map[method](xs, ys, *quad_corners)
 
     ys = ys_norm * src.shape[0]
     xs = xs_norm * src.shape[1]
     return xs, ys, bb
+
+
+def get_quad_bounding_box(quad_corners: list[tuple[int, int]]) -> tuple[list[int], int, int, tuple[int, int]]:
+    bb = [
+        min([c[0] for c in quad_corners])
+        , min([c[1] for c in quad_corners])
+        , max([c[0] for c in quad_corners])
+        , max([c[1] for c in quad_corners])
+    ]
+    bb_width = bb[2] - bb[0]
+    origin = (bb[0], bb[1])
+    bb_height = bb[3] - bb[1]
+
+    return bb, bb_width, bb_height, origin
+
+
+def get_ordered_corners(quad_corners: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """
+        note: sorts original input list by y
+        @return: from top to bottom and left to right, similar to text
+    """
+    # should already be ordered by y, but don't suppose this is the case
+    quad_corners.sort(key=lambda c: c[1])
+    upper_left_corner = min(quad_corners[:2], key=lambda c: c[0])
+    upper_right_corner = max(quad_corners[:2], key=lambda c: c[0])
+    bottom_left_corner = min(quad_corners[2:4], key=lambda c: c[0])
+    bottom_right_corner = max(quad_corners[2:4], key=lambda c: c[0])
+    return [upper_left_corner, upper_right_corner, bottom_left_corner, bottom_right_corner]
+
+
+def get_quad_corners(roi_img) -> list[tuple[int, int]]:
+    contours, hierarchy = cv.findContours(roi_img, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+    moments = [cv.moments(c) for c in contours]
+    centers = [(int(m["m10"] / m["m00"]), int(m["m01"] / m["m00"])) for m in moments]
+    return centers
+
+
+def remap_from_quadrilateral(_, roi_img: ndarray, dst_width: int,  dst_height: int) -> tuple[ndarray, list[int]]:
+    # ONLY IMPLEMENTED FOR HOMOGRAPHY
+
+    quad_corners = get_quad_corners(roi_img)
+    bb, bb_width, bb_height, origin = get_quad_bounding_box(quad_corners)
+    quad_corners = get_ordered_corners(quad_corners)
+
+    # src_pts = [upper_left_corner, upper_right_corner, bottom_left_corner, bottom_right_corner]
+    dst_pts = [[0, 0], [dst_width, 0], [0, dst_height], [dst_width, dst_height]]
+    dst_bb = [0, 0, dst_width, dst_height]
+
+    src_pts, dst_pts = np.array(quad_corners).astype(np.float32), np.array(dst_pts).astype(np.float32)
+    h_matrix = cv.getPerspectiveTransform(src_pts, dst_pts)
+    return h_matrix, dst_bb
 
 # endregion remap quadrilateral
