@@ -200,6 +200,26 @@ def get_knee_point(endpoints, line_points):
     return min(line_points, key=lambda p: angle_at_p(endpoints[0], p, endpoints[1]))
 
 
+def alen_integral(x, a, b):
+    """
+    arc length primitive for the parabola(s) given by :  a*x**2 + b*x + c ;  at the given point(s) x.
+    """
+    return (((2 * a * x + b) ** 2 + 1) ** (1 / 2) * (2 * a * x + b) + np.arcsinh(2 * a * x + b)) / (4 * a)
+
+
+def get_parabolas_edges_xs(ws, bottom_parabola, top_parabola):
+    """
+    get left and right edges of all parabolas segments between bottom and top parabolas' segments
+    """
+    p0x, p0y = np.min(bottom_parabola, axis=0)
+    p2x, p2y = np.max(bottom_parabola, axis=0)
+    p3x, p3y = np.min(top_parabola, axis=0)
+    p5x, p5y = np.max(top_parabola, axis=0)
+    leftmost_xs = ws * p0x + (1 - ws) * p3x
+    rightmost_xs = ws * p2x + (1 - ws) * p5x
+    return leftmost_xs, rightmost_xs
+
+
 def remap_inside_parabolas(src, roi_img, recalled=False):
     """
     Generic implementation applied to both simple and advanced parabola remaps.
@@ -207,20 +227,7 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
     @param recalled: safeguard against infinite recursive calls.
     @return: @return: x and y mappings ( to the original image pixels ) and roi bounding box coordinates
     """
-    import skimage
-    ret, roi_points_img = cv.threshold(roi_img, 127, 255, cv.THRESH_BINARY)  # ensure maximum value is 255
-    skeleton = skimage.img_as_ubyte(skimage.morphology.skeletonize(roi_img))
-    endpoints = find_endpoints(skeleton)
-
-    # get contours and simplify them with poly
-    contours, _ = cv.findContours(skeleton, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
-
-    if len(contours) != 2:
-        raise (f"Parabola Remap requires exactly 2 drawn lines, however it obtained {len(contours)} contours.")
-
-    # it is not a closed contour, but it should be easier to get the endpoints this way
-    # the endpoints should be in the polyline to validate the input in the next step
-    polylines = [cv.approxPolyDP(cnt, .005 * cv.arcLength(cnt, True), True)[:, 0] for cnt in contours]
+    endpoints, polylines, roi_points_img = get_parabolas_pair(roi_img)
 
     match validate_parabolas(polylines, endpoints):
         case 2:
@@ -277,9 +284,6 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
         a_2, b_2, c_2 = c2_coeffs
         return -(y - a_2 * x ** 2 - b_2 * x - c_2) / ((a_2 - a_1) * x ** 2 + (b_2 - b_1) * x + c_2 - c_1)
 
-    def alen_integral(x, a, b):
-        return (((2 * a * x + b) ** 2 + 1) ** (1 / 2) * (2 * a * x + b) + np.arcsinh(2 * a * x + b)) / (4 * a)
-
     def arc_len(w, x1, x2):
         a_b_s = w[:, :, np.newaxis] * c1_coeffs[:2] + (1 - w[:, :, np.newaxis]) * c2_coeffs[:2]
         a = a_b_s[:, :, 0]
@@ -287,12 +291,7 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
         return alen_integral(x2, a, b) - alen_integral(x1, a, b)
 
     def compute_x_norm(ws, px):
-        p0x, p0y = np.min(bottom_parabola, axis=0)
-        p2x, p2y = np.max(bottom_parabola, axis=0)
-        p3x, p3y = np.min(top_parabola, axis=0)
-        p5x, p5y = np.max(top_parabola, axis=0)
-        leftmost_xs = ws * p0x + (1 - ws) * p3x
-        rightmost_xs = ws * p2x + (1 - ws) * p5x
+        leftmost_xs, rightmost_xs = get_parabolas_edges_xs(ws, bottom_parabola, top_parabola)
         full_segs_lens = arc_len(ws, leftmost_xs, rightmost_xs)
         to_point_lens = arc_len(ws, leftmost_xs, px)
 
@@ -323,6 +322,24 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
     ys_norm[np.isnan(ys_norm)] = -10
 
     return xs_norm, ys_norm, bb, recalled
+
+
+def get_parabolas_pair(roi_img):
+    import skimage
+    ret, roi_points_img = cv.threshold(roi_img, 127, 255, cv.THRESH_BINARY)
+    skeleton = skimage.img_as_ubyte(skimage.morphology.skeletonize(roi_img))
+    endpoints = find_endpoints(skeleton)
+
+    contours, _ = cv.findContours(skeleton, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+
+    if len(contours) != 2:
+        raise (f"Parabola Remap requires exactly 2 drawn lines, however it obtained {len(contours)} contours.")
+
+    # it is not a closed contour, but it should be easier to get the endpoints this way
+    # the endpoints should be in the polyline to validate the input in the next step
+    polylines = [cv.approxPolyDP(cnt, .005 * cv.arcLength(cnt, True), True)[:, 0] for cnt in contours]
+
+    return endpoints, polylines, roi_points_img
 
 
 def remap_inside_parabolas_simple(src, roi_img):
@@ -370,6 +387,84 @@ def remap_inside_parabolas_advanced(src, roi_img, curve_adjust, ortho_adjust, fl
     ys = (ys_norm * src.shape[0]).astype(np.float32)
     xs = (xs_norm * src.shape[1]).astype(np.float32)
     return xs, ys, bb
+
+
+def remap_from_inside_parabolas(_, roi_img, dst_width: int,  dst_height: int, recalled=False):
+    def approx_rev_alen_integral(r, a, b, x_s, x_f):
+        from numpy.polynomial import Polynomial as pol
+        from joblib import Parallel, delayed
+
+        x_interval = x_f - x_s
+        n_points = 5
+        xx = np.array([x_s + i * x_interval / n_points for i in range(n_points)])
+        ll = alen_integral(xx, a, b)
+
+        def compute_roots(j, i):
+            return next(
+                filter(
+                    lambda e: x_f[j, i] >= e.real >= x_s[j, i] and abs(e.imag) < 1e-5,
+                    (pol.fit(x=xx[:, j, i], y=ll[:, j, i], deg=3) - r[j, i]).roots()
+                )
+                , -10 + 0j).real
+
+        x_s = Parallel(n_jobs=-1)(delayed(compute_roots)(j, i) for j in range(a.shape[0]) for i in range(a.shape[1]))
+        return np.array(x_s).astype(np.float32).reshape(a.shape)
+
+    def compute_x(a, b, x_s, x_f, x):
+        # x / w = ix_len / t_len <=> x/w * t_len = ix_len <=> ... ( replace lens w/ alen_integrals )
+        x_s_l = alen_integral(x_s, a, b)
+        return approx_rev_alen_integral(
+            x / dst_width * (alen_integral(x_f, a, b) - x_s_l) + x_s_l,
+            # alen_integral(x_s, a, b) + x,
+            a, b, x_s, x_f
+        )
+
+    def compute_ys(xs, a, b, c):  # the ez part, lol
+        return a * np.power(xs, 2) + b * xs + c
+
+    # get points for parabola
+    endpoints, polylines, roi_points_img = get_parabolas_pair(roi_img)
+
+    match validate_parabolas(polylines, endpoints):
+        case 2:
+            raise ("Couldn't match two endpoints to one of the contours."
+                   "It may be the case that the parabolas are too flat.")
+        case 1:  # current orientation won't work
+            if not recalled:  # shouldn't get stuck, if equal proceeds; but will use a safeguard against potential oversights!
+                xs, ys, _ = remap_from_inside_parabolas(None, cv.flip(cv.rotate(roi_points_img, cv.ROTATE_90_CLOCKWISE), 1),
+                                                            dst_width, dst_height, True)
+                return np.rot90(np.fliplr(ys)), np.rot90(np.fliplr(xs)), None
+            # -- raise(...) -- no longer raise exception:
+            # it will likely result in a messy map,
+            # but may also work fine on some cases.
+        case _:
+            pass
+
+    # get parabolas by Y coordinate
+    top_parabola, bottom_parabola = sorted(polylines, key=lambda pl: max(p[1] for p in pl))
+
+    # get parabolas coefficients
+    c1_coeffs = np.polyfit(bottom_parabola[:, 0], bottom_parabola[:, 1], 2)
+    c2_coeffs = np.polyfit(top_parabola[:, 0], top_parabola[:, 1], 2)
+
+    # get all points' parabolas coefficients
+    h_m1 = dst_height - 1
+    ws = np.array([j / h_m1 for j in range(dst_height) for i in range(dst_width)]).reshape(dst_height, dst_width)
+    a_b_c_s = ws[:, :, np.newaxis] * c1_coeffs + (1 - ws[:, :, np.newaxis]) * c2_coeffs
+    a = a_b_c_s[:, :, 0]
+    b = a_b_c_s[:, :, 1]
+    c = a_b_c_s[:, :, 2]
+
+    # get edges in src and xs in dst
+    leftmost_xs, rightmost_xs = get_parabolas_edges_xs(ws, bottom_parabola, top_parabola)
+    x = np.array([i for _ in range(dst_height) for i in range(dst_width)]).reshape(dst_height, dst_width)
+
+    # compute xs & ys
+    xs = compute_x(a, b, leftmost_xs, rightmost_xs, x).astype(np.float32)
+    ys = compute_ys(xs, a, b, c).astype(np.float32)
+
+    #img_remap = cv.remap(src, xs, ys, cv.INTER_LINEAR)
+    return xs, ys, None
 
 
 # endregion remap parabolas
@@ -602,7 +697,6 @@ def remap_from_quadrilateral(_, roi_img: ndarray, dst_width: int,  dst_height: i
     # ONLY IMPLEMENTED FOR HOMOGRAPHY
 
     quad_corners = get_quad_corners(roi_img)
-    bb, bb_width, bb_height, origin = get_quad_bounding_box(quad_corners)
     quad_corners = get_ordered_corners(quad_corners)
 
     # src_pts = [upper_left_corner, upper_right_corner, bottom_left_corner, bottom_right_corner]

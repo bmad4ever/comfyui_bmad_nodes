@@ -1944,6 +1944,25 @@ class RemapInsideParabolasAdvanced(RemapBase):
                 },)
 
 
+class RemapFromInsideParabolas(RemapBase):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "src_mask_with_2_parabolas": ("MASK",),
+            "width": ("INT", {"default": 512, "min": 16, "max": 4096}),
+            "height": ("INT", {"default": 512, "min": 16, "max": 4096}),
+        }
+        }
+
+    def send_remap(self, src_mask_with_2_parabolas, width, height):
+        from .utils.remaps import remap_from_inside_parabolas
+        return ({
+                    "func": remap_from_inside_parabolas,
+                    "xargs": [tensor2opencv(src_mask_with_2_parabolas, 1), width, height],
+                    "dims": (width, height)
+                },)
+
+
 class RemapQuadrilateral(RemapBase):
     from .utils.remaps import quad_remap_methods_map
 
@@ -2151,6 +2170,7 @@ NODE_CLASS_MAPPINGS = {
     "RemapToOuterCylinder": OuterCylinderRemap,
     "RemapInsideParabolas": RemapInsideParabolas,
     "RemapInsideParabolasAdvanced": RemapInsideParabolasAdvanced,
+    "RemapFromInsideParabolas": RemapFromInsideParabolas,
     "RemapToQuadrilateral": RemapQuadrilateral,
     "RemapFromQuadrilateral (homography)": RemapFromQuadrilateral,
 
