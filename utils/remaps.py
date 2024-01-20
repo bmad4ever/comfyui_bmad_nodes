@@ -53,8 +53,10 @@ def remap_inner_cylinder(src, fov=90, swap_xy=False):
     @return: x and y mappings ( to the original image pixels )
     """
     xs, ys, w, h = xy_pixel_indexes(src, swap_xy)
+    w_m1 = w - 1
+    h_m1 = h - 1
 
-    pc = [xs - w / 2, ys - h / 2]  # offset center
+    pc = [xs - w_m1 / 2, ys - h_m1 / 2]  # offset center
 
     ratio = np.tan(np.deg2rad(fov / 2))
     omega = w / 2
@@ -65,8 +67,8 @@ def remap_inner_cylinder(src, fov=90, swap_xy=False):
     _, zc = quadratic_formulae((pc[0] ** 2) / (f ** 2) + 1, -2 * z0, z0 ** 2 - r ** 2)
 
     final_point = [pc[0] * zc / f, pc[1] * zc / f]
-    final_point[0] += w / 2
-    final_point[1] += h / 2
+    final_point[0] += w_m1 / 2
+    final_point[1] += h_m1 / 2
 
     if swap_xy:
         return final_point[1], final_point[0], None
@@ -87,8 +89,10 @@ def remap_outer_cylinder(src, fov=90, swap_xy=False):
     @return: x and y mappings ( to the original image pixels )
     """
     xs, ys, w, h = xy_pixel_indexes(src, swap_xy)
+    w_m1 = w - 1
+    h_m1 = h - 1
 
-    pc = [xs - w / 2, ys - h / 2]  # offset center
+    pc = [xs - w_m1 / 2, ys - h_m1 / 2]  # offset center
 
     ratio = np.tan(np.deg2rad(fov / 2))
     omega = w / 2
@@ -104,8 +108,8 @@ def remap_outer_cylinder(src, fov=90, swap_xy=False):
 
     zc, _ = quadratic_formulae((pc[0] ** 2) / (f ** 2) + 1, -2 * z0, z0 ** 2 - r ** 2)
     final_point = [pc[0] * zc / f, pc[1] * zc / f]
-    final_point[0] += w / 2
-    final_point[1] += h / 2
+    final_point[0] += w_m1 / 2
+    final_point[1] += h_m1 / 2
     if swap_xy:
         return final_point[1], final_point[0], None
     else:
@@ -346,8 +350,8 @@ def remap_inside_parabolas_simple(src, roi_img):
     xs_norm, ys_norm, bb, _ = remap_inside_parabolas(src, roi_img)
 
     # convert normalized coords to picture coords
-    ys = (ys_norm * src.shape[0]).astype(np.float32)
-    xs = (xs_norm * src.shape[1]).astype(np.float32)
+    ys = (ys_norm * (src.shape[0]-1)).astype(np.float32)
+    xs = (xs_norm * (src.shape[1]-1)).astype(np.float32)
     return xs, ys, bb
 
 
@@ -384,8 +388,8 @@ def remap_inside_parabolas_advanced(src, roi_img, curve_adjust, ortho_adjust, fl
         ys_norm = ortho_wise_adjust(ys_norm)
 
     # convert normalized coords to picture coords
-    ys = (ys_norm * src.shape[0]).astype(np.float32)
-    xs = (xs_norm * src.shape[1]).astype(np.float32)
+    ys = (ys_norm * (src.shape[0]-1)).astype(np.float32)
+    xs = (xs_norm * (src.shape[1]-1)).astype(np.float32)
     return xs, ys, bb
 
 
@@ -653,8 +657,8 @@ def remap_quadrilateral(src: ndarray, roi_img: ndarray, method: str) -> tuple[nd
 
     xs_norm, ys_norm = quad_remap_methods_map[method](xs, ys, *quad_corners)
 
-    ys = ys_norm * src.shape[0]
-    xs = xs_norm * src.shape[1]
+    ys = ys_norm * (src.shape[0]-1)
+    xs = xs_norm * (src.shape[1]-1)
     return xs, ys, bb
 
 
