@@ -1906,6 +1906,41 @@ class OuterCylinderRemap(RemapBase):
                 },)
 
 
+class RemapPinch(RemapBase):
+    INPUT_TYPES_DICT = {
+        "required": {
+            "power_x": ("FLOAT", {"default": 1, "min": 1, "max": 3, "step": .05}),
+            "power_y": ("FLOAT", {"default": 1, "min": 1, "max": 3, "step": .05}),
+            "center_x": ("FLOAT", {"default": .5, "min": 0, "max": 1, "step": .05}),
+            "center_y": ("FLOAT", {"default": .5, "min": 0, "max": 1, "step": .05}),
+        }
+    }
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return RemapPinch.INPUT_TYPES_DICT
+
+    def send_remap(self, power_x, power_y, center_x, center_y):
+        from .utils.remaps import remap_pinch_or_stretch
+        return ({
+                    "func": remap_pinch_or_stretch,
+                    "xargs": [(power_x, power_y), (center_x, center_y)]
+                },)
+
+
+class RemapStretch(RemapBase):
+    @classmethod
+    def INPUT_TYPES(s):
+        return RemapPinch.INPUT_TYPES_DICT
+
+    def send_remap(self, power_x, power_y, center_x, center_y):
+        from .utils.remaps import remap_pinch_or_stretch
+        return ({
+                    "func": remap_pinch_or_stretch,
+                    "xargs": [(1/power_x, 1/power_y), (center_x, center_y)]
+                },)
+
+
 class RemapInsideParabolas(RemapBase):
     @classmethod
     def INPUT_TYPES(s):
@@ -2168,6 +2203,8 @@ NODE_CLASS_MAPPINGS = {
     "Remap": Remap,
     "RemapToInnerCylinder": InnerCylinderRemap,
     "RemapToOuterCylinder": OuterCylinderRemap,
+    "RemapPinch": RemapPinch,
+    "RemapStretch": RemapStretch,
     "RemapInsideParabolas": RemapInsideParabolas,
     "RemapInsideParabolasAdvanced": RemapInsideParabolasAdvanced,
     "RemapFromInsideParabolas": RemapFromInsideParabolas,

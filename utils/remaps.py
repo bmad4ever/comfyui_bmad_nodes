@@ -44,7 +44,7 @@ def debug_draw_outer_cylinder_proj(z0, r, f, o):
     plt.savefig('plot_cylinder_projection.png')
 
 
-def remap_inner_cylinder(src, fov=90, swap_xy=False):
+def remap_inner_cylinder(src: ndarray, fov=90, swap_xy=False):
     """
     Adapted from https://stackoverflow.com/questions/12017790/warp-image-to-appear-in-cylindrical-projection ;
     radius always equal to w; and f changes according to fov.
@@ -76,7 +76,7 @@ def remap_inner_cylinder(src, fov=90, swap_xy=False):
         return final_point[0], final_point[1], None
 
 
-def remap_outer_cylinder(src, fov=90, swap_xy=False):
+def remap_outer_cylinder(src: ndarray, fov=90, swap_xy=False):
     """
     Map to a cylinder far away.
     The cylinder radius and position is set to edge the imaginary horizontal view frustum
@@ -114,6 +114,36 @@ def remap_outer_cylinder(src, fov=90, swap_xy=False):
         return final_point[1], final_point[0], None
     else:
         return final_point[0], final_point[1], None
+
+
+def remap_pinch_or_stretch(src: ndarray, power: tuple[float, float], center: tuple[float, float]):
+    power_x, power_y = power
+    px, py = center
+
+    nsx, psx = px, 1 - px
+    nsy, psy = py, 1 - py
+
+    xs = [(x / (src.shape[1] - 1) - px) for _ in range(src.shape[0]) for x in range(src.shape[1])]
+    ys = [(y / (src.shape[0] - 1) - py) for y in range(src.shape[0]) for _ in range(src.shape[1])]
+    xs = np.array(xs).astype(np.float32).reshape(src.shape[:2])
+    ys = np.array(ys).astype(np.float32).reshape(src.shape[:2])
+    xs[xs < 0] /= nsx
+    xs[xs > 0] /= psx
+    ys[ys < 0] /= nsy
+    ys[ys > 0] /= psy
+
+    xs = np.sign(xs) * (1 - np.power(1 - np.abs(xs), power_x))
+    ys = np.sign(ys) * (1 - np.power(1 - np.abs(ys), power_y))
+    xs[xs < 0] *= nsx
+    xs[xs > 0] *= psx
+    ys[ys < 0] *= nsy
+    ys[ys > 0] *= psy
+    xs += px
+    ys += py
+    xs *= (src.shape[1] - 1)
+    ys *= (src.shape[0] - 1)
+
+    return xs, ys, None
 
 
 # region remap parabolas
