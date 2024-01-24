@@ -1928,6 +1928,29 @@ class RemapPinch(RemapBase):
                 },)
 
 
+class RemapBarrelDistortion(RemapBase):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required":
+            {
+                "a": ("FLOAT", {"default": 0, "step": 0.00001}),
+                "b": ("FLOAT", {"default": 0, "step": 0.00001}),
+                "c": ("FLOAT", {"default": 0, "step": 0.00001}),
+            },
+            "optional": {
+                "d": ("FLOAT", {"forceInput": True})
+            }
+        }
+
+    def send_remap(self, a, b, c, d=None):
+        from .utils.remaps import remap_barrel_distortion
+        return ({
+                    "func": remap_barrel_distortion,
+                    "xargs": [a, b, c, d]
+                },)
+
+
 class RemapStretch(RemapBase):
     @classmethod
     def INPUT_TYPES(s):
@@ -2205,6 +2228,7 @@ NODE_CLASS_MAPPINGS = {
     "RemapToOuterCylinder": OuterCylinderRemap,
     "RemapPinch": RemapPinch,
     "RemapStretch": RemapStretch,
+    "RemapBarrelDistortion": RemapBarrelDistortion,
     "RemapInsideParabolas": RemapInsideParabolas,
     "RemapInsideParabolasAdvanced": RemapInsideParabolasAdvanced,
     "RemapFromInsideParabolas": RemapFromInsideParabolas,

@@ -146,6 +146,34 @@ def remap_pinch_or_stretch(src: ndarray, power: tuple[float, float], center: tup
     return xs, ys, None
 
 
+def remap_barrel_distortion(src: ndarray, a: float, b: float, c: float, d: float | None):
+    """
+    Similar to magick's barrel distort.
+    Can be used to: undistort images from camera/lens combo; create barrel, pincushion or mustache distortion.
+    """
+    xs = [x - (src.shape[1] - 1) / 2 for y in range(src.shape[0]) for x in range(src.shape[1])]
+    ys = [y - (src.shape[0] - 1) / 2 for y in range(src.shape[0]) for x in range(src.shape[1])]
+    xs = np.array(xs).astype(np.float32).reshape(src.shape[:2])
+    ys = np.array(ys).astype(np.float32).reshape(src.shape[:2])
+
+    radii, radians = cv.cartToPolar(xs, ys, angleInDegrees=False)
+    min_whr = min(radii[0, src.shape[1] // 2], radii[src.shape[0] // 2, 0])
+    norm_radii = radii / min_whr
+
+    def lens_undistort(r: ndarray, a: float, b: float, c: float, d: float | None = None):
+        if d is None:
+            d = 1 - (a + b + c)
+        return (a * r ** 3 + b * r ** 2 + c * r + d) * r
+
+    new_radii = lens_undistort(norm_radii, a, b, c, d)
+    new_radii *= min_whr
+
+    xs, ys = cv.polarToCart(new_radii, radians)
+    xs += src.shape[1] / 2
+    ys += src.shape[0] / 2
+    return xs, ys, None
+
+
 # region remap parabolas
 
 def get_quadratic_curve_coeffs(p0, p1, p2):
@@ -380,8 +408,8 @@ def remap_inside_parabolas_simple(src, roi_img):
     xs_norm, ys_norm, bb, _ = remap_inside_parabolas(src, roi_img)
 
     # convert normalized coords to picture coords
-    ys = (ys_norm * (src.shape[0]-1)).astype(np.float32)
-    xs = (xs_norm * (src.shape[1]-1)).astype(np.float32)
+    ys = (ys_norm * (src.shape[0] - 1)).astype(np.float32)
+    xs = (xs_norm * (src.shape[1] - 1)).astype(np.float32)
     return xs, ys, bb
 
 
@@ -418,12 +446,12 @@ def remap_inside_parabolas_advanced(src, roi_img, curve_adjust, ortho_adjust, fl
         ys_norm = ortho_wise_adjust(ys_norm)
 
     # convert normalized coords to picture coords
-    ys = (ys_norm * (src.shape[0]-1)).astype(np.float32)
-    xs = (xs_norm * (src.shape[1]-1)).astype(np.float32)
+    ys = (ys_norm * (src.shape[0] - 1)).astype(np.float32)
+    xs = (xs_norm * (src.shape[1] - 1)).astype(np.float32)
     return xs, ys, bb
 
 
-def remap_from_inside_parabolas(_, roi_img, dst_width: int,  dst_height: int, recalled=False):
+def remap_from_inside_parabolas(_, roi_img, dst_width: int, dst_height: int, recalled=False):
     def approx_rev_alen_integral(r, a, b, x_s, x_f):
         from numpy.polynomial import Polynomial as pol
         from joblib import Parallel, delayed
@@ -465,8 +493,9 @@ def remap_from_inside_parabolas(_, roi_img, dst_width: int,  dst_height: int, re
                    "It may be the case that the parabolas are too flat.")
         case 1:  # current orientation won't work
             if not recalled:  # shouldn't get stuck, if equal proceeds; but will use a safeguard against potential oversights!
-                xs, ys, _ = remap_from_inside_parabolas(None, cv.flip(cv.rotate(roi_points_img, cv.ROTATE_90_CLOCKWISE), 1),
-                                                            dst_width, dst_height, True)
+                xs, ys, _ = remap_from_inside_parabolas(None,
+                                                        cv.flip(cv.rotate(roi_points_img, cv.ROTATE_90_CLOCKWISE), 1),
+                                                        dst_width, dst_height, True)
                 return np.rot90(np.fliplr(ys)), np.rot90(np.fliplr(xs)), None
             # -- raise(...) -- no longer raise exception:
             # it will likely result in a messy map,
@@ -497,7 +526,7 @@ def remap_from_inside_parabolas(_, roi_img, dst_width: int,  dst_height: int, re
     xs = compute_x(a, b, leftmost_xs, rightmost_xs, x).astype(np.float32)
     ys = compute_ys(xs, a, b, c).astype(np.float32)
 
-    #img_remap = cv.remap(src, xs, ys, cv.INTER_LINEAR)
+    # img_remap = cv.remap(src, xs, ys, cv.INTER_LINEAR)
     return xs, ys, None
 
 
@@ -673,7 +702,8 @@ quad_remap_methods_map = {
 }
 
 
-def remap_quadrilateral(src: ndarray, roi_img: ndarray, method: str) -> tuple[ndarray, ndarray, list[int]] | tuple[ndarray, list[int]]:
+def remap_quadrilateral(src: ndarray, roi_img: ndarray, method: str) -> tuple[ndarray, ndarray, list[int]] | tuple[
+    ndarray, list[int]]:
     quad_corners = get_quad_corners(roi_img)
     bb, bb_width, bb_height, origin = get_quad_bounding_box(quad_corners)
     quad_corners = get_ordered_corners(quad_corners)
@@ -687,8 +717,8 @@ def remap_quadrilateral(src: ndarray, roi_img: ndarray, method: str) -> tuple[nd
 
     xs_norm, ys_norm = quad_remap_methods_map[method](xs, ys, *quad_corners)
 
-    ys = ys_norm * (src.shape[0]-1)
-    xs = xs_norm * (src.shape[1]-1)
+    ys = ys_norm * (src.shape[0] - 1)
+    xs = xs_norm * (src.shape[1] - 1)
     return xs, ys, bb
 
 
@@ -727,7 +757,7 @@ def get_quad_corners(roi_img) -> list[tuple[int, int]]:
     return centers
 
 
-def remap_from_quadrilateral(_, roi_img: ndarray, dst_width: int,  dst_height: int) -> tuple[ndarray, list[int]]:
+def remap_from_quadrilateral(_, roi_img: ndarray, dst_width: int, dst_height: int) -> tuple[ndarray, list[int]]:
     # ONLY IMPLEMENTED FOR HOMOGRAPHY
 
     quad_corners = get_quad_corners(roi_img)
