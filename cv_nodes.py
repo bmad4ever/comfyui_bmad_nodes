@@ -1928,29 +1928,6 @@ class RemapPinch(RemapBase):
                 },)
 
 
-class RemapBarrelDistortion(RemapBase):
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required":
-            {
-                "a": ("FLOAT", {"default": 0, "step": 0.00001}),
-                "b": ("FLOAT", {"default": 0, "step": 0.00001}),
-                "c": ("FLOAT", {"default": 0, "step": 0.00001}),
-            },
-            "optional": {
-                "d": ("FLOAT", {"forceInput": True})
-            }
-        }
-
-    def send_remap(self, a, b, c, d=None):
-        from .utils.remaps import remap_barrel_distortion
-        return ({
-                    "func": remap_barrel_distortion,
-                    "xargs": [a, b, c, d]
-                },)
-
-
 class RemapStretch(RemapBase):
     @classmethod
     def INPUT_TYPES(s):
@@ -1961,6 +1938,50 @@ class RemapStretch(RemapBase):
         return ({
                     "func": remap_pinch_or_stretch,
                     "xargs": [(1/power_x, 1/power_y), (center_x, center_y)]
+                },)
+
+
+class RemapBarrelDistortion(RemapBase):
+    @staticmethod
+    def BARREL_DIST_TYPES():
+        return {
+            "required":
+            {
+                "a": ("FLOAT", {"default": 0, "step": 0.00001}),
+                "b": ("FLOAT", {"default": 0, "step": 0.00001}),
+                "c": ("FLOAT", {"default": 0, "step": 0.00001}),
+                "use_inverse_variant": ("BOOLEAN", {"default": True})
+            },
+            "optional": {
+                "d": ("FLOAT", {"forceInput": True})
+            }
+        }
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return RemapBarrelDistortion.BARREL_DIST_TYPES()
+        #inputs = RemapBarrelDistortion.BARREL_DIST_F_TYPES()
+        #inputs["required"]["use_inverse_variant"] = ("BOOLEAN", {"default": True})
+        #return inputs
+
+    def send_remap(self, a, b, c, use_inverse_variant, d=None):
+        from .utils.remaps import remap_barrel_distortion
+        return ({
+                    "func": remap_barrel_distortion,
+                    "xargs": [a, b, c, d, use_inverse_variant]
+                },)
+
+
+class RemapReverseBarrelDistortion(RemapBase):
+    @classmethod
+    def INPUT_TYPES(s):
+        return RemapBarrelDistortion.BARREL_DIST_TYPES()
+
+    def send_remap(self, a, b, c, use_inverse_variant, d=None):
+        from .utils.remaps import remap_reverse_barrel_distortion
+        return ({
+                    "func": remap_reverse_barrel_distortion,
+                    "xargs": [a, b, c, d, use_inverse_variant]
                 },)
 
 
@@ -2229,6 +2250,7 @@ NODE_CLASS_MAPPINGS = {
     "RemapPinch": RemapPinch,
     "RemapStretch": RemapStretch,
     "RemapBarrelDistortion": RemapBarrelDistortion,
+    "RemapReverseBarrelDistortion": RemapReverseBarrelDistortion,
     "RemapInsideParabolas": RemapInsideParabolas,
     "RemapInsideParabolasAdvanced": RemapInsideParabolasAdvanced,
     "RemapFromInsideParabolas": RemapFromInsideParabolas,

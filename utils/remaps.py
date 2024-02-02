@@ -146,13 +146,28 @@ def remap_pinch_or_stretch(src: ndarray, power: tuple[float, float], center: tup
     return xs, ys, None
 
 
-def remap_barrel_distortion(src: ndarray, a: float, b: float, c: float, d: float | None):
+def lens_undistort(r: ndarray | float, a: float, b: float, c: float, d: float | None = None):
+    if d is None:
+        d = 1 - (a + b + c)
+    return (a * r ** 3 + b * r ** 2 + c * r + d) * r
+
+
+def lens_undistort_inv(r: ndarray | float, a: float, b: float, c: float, d: float | None = None):
+        a, b, c = -a, -b, -c
+        if d is None:
+            d = 1 - (a + b + c)
+        return r / (a * r ** 3 + b * r ** 2 + c * r + d)
+
+
+def remap_barrel_distortion(src: ndarray, a: float, b: float, c: float, d: float | None, inverse: bool):
     """
     Similar to magick's barrel distort.
     Can be used to: undistort images from camera/lens combo; create barrel, pincushion or mustache distortion.
+
+    inverse. -> use alternative formula to compute big R  ( not mathematical inverse func of the vanilla func )
     """
-    xs = [x - (src.shape[1] - 1) / 2 for y in range(src.shape[0]) for x in range(src.shape[1])]
-    ys = [y - (src.shape[0] - 1) / 2 for y in range(src.shape[0]) for x in range(src.shape[1])]
+    xs = [x - (src.shape[1] - 1) / 2 for _ in range(src.shape[0]) for x in range(src.shape[1])]
+    ys = [y - (src.shape[0] - 1) / 2 for y in range(src.shape[0]) for _ in range(src.shape[1])]
     xs = np.array(xs).astype(np.float32).reshape(src.shape[:2])
     ys = np.array(ys).astype(np.float32).reshape(src.shape[:2])
 
@@ -160,17 +175,87 @@ def remap_barrel_distortion(src: ndarray, a: float, b: float, c: float, d: float
     min_whr = min(radii[0, src.shape[1] // 2], radii[src.shape[0] // 2, 0])
     norm_radii = radii / min_whr
 
-    def lens_undistort(r: ndarray, a: float, b: float, c: float, d: float | None = None):
-        if d is None:
-            d = 1 - (a + b + c)
-        return (a * r ** 3 + b * r ** 2 + c * r + d) * r
+    undistort_method = lens_undistort_inv if inverse else lens_undistort
+    new_radii = undistort_method(norm_radii, a, b, c, d)
 
-    new_radii = lens_undistort(norm_radii, a, b, c, d)
     new_radii *= min_whr
-
     xs, ys = cv.polarToCart(new_radii, radians)
     xs += src.shape[1] / 2
     ys += src.shape[0] / 2
+    return xs, ys, None
+
+
+def remap_reverse_barrel_distortion(src: ndarray, a: float, b: float, c: float, d: float | None, inverse: bool):
+    from numpy.polynomial import Polynomial
+    from joblib import Parallel, delayed
+
+    if d is None:
+        d = 1 - (a + b + c)
+
+    xs = [x - (src.shape[1] - 1) / 2 for _ in range(src.shape[0]) for x in range(src.shape[1])]
+    ys = [y - (src.shape[0] - 1) / 2 for y in range(src.shape[0]) for _ in range(src.shape[1])]
+    xs = np.array(xs).astype(np.float32).reshape(src.shape[:2])
+    ys = np.array(ys).astype(np.float32).reshape(src.shape[:2])
+
+    radii, radians = cv.cartToPolar(xs, ys, angleInDegrees=False)
+    min_whr = min(radii[0, src.shape[1] // 2], radii[src.shape[0] // 2, 0])
+    rs = radii/min_whr
+
+    def compute_roots(poly, j, i):
+        return next(
+            filter(
+                lambda e: 2 >= e.real >= 0 and abs(e.imag) < 1e-8,
+                (poly - rs[j, i]).roots()
+            )
+            , -10 + 0j).real
+
+    if inverse:
+        # if using inverse barrel formulae
+
+        # don't know how to solve this; but an approximation seems to suffice.
+        # not sure if this is rly smart or rly dum; is there a simpler solution? I might be using a tank to kill a fly
+        samples = 512
+        max_rs = np.max(rs)
+        radii_range = int(max_rs * samples)
+        samples = float(samples)
+        small_rs = np.array([(float(x)) / samples for x in range(radii_range)]).astype(np.float32)
+
+        # try to guess whether it is barrel or pincushion
+        reference_r = 1.05
+        ref_dist_r = lens_undistort_inv(reference_r, a, b, c)
+        expanded = ref_dist_r < reference_r
+
+        def find_scaled_max_rs(fn):
+            from scipy.optimize import dual_annealing
+            ret = dual_annealing(fn, bounds=list(zip([0], [2])))
+            return ret.x
+        mrs = find_scaled_max_rs(lambda r: abs(max_rs - lens_undistort_inv(r, a, b, c)))
+        small_rs *= mrs / max_rs
+        big_rs = lens_undistort_inv(small_rs, a, b, c)
+
+        if expanded:
+            # has expanded -> polyfit in reverse and use solve over the poly to readjust
+            poly = np.polyfit(small_rs, big_rs, 7)[::-1]  # -> Polynomial receives coeffs in reverse order
+            poly = Polynomial(poly)
+            rev_radii = Parallel(n_jobs=-1)(delayed(compute_roots)(poly, j, i)
+                                            for j in range(rs.shape[0]) for i in range(rs.shape[1]))
+            rev_radii = np.array(rev_radii).astype(np.float32).reshape(rs.shape)
+        else:
+            # otherwise -> polyfit and use poly directly to readjust
+            poly = np.polyfit(big_rs, small_rs, 7)
+            poly = np.poly1d(poly)
+            rev_radii = poly(rs)
+    else:
+        # if using normal barrel formulae
+        poly = Polynomial([0, d, c, b, a])
+        rev_radii = Parallel(n_jobs=-1)(delayed(compute_roots)(poly, j, i)
+                                        for j in range(rs.shape[0]) for i in range(rs.shape[1]))
+        rev_radii = np.array(rev_radii).astype(np.float32).reshape(rs.shape)
+
+    rev_radii *= min_whr
+    xs, ys = cv.polarToCart(rev_radii, radians)
+    xs += src.shape[1] // 2
+    ys += src.shape[0] // 2
     return xs, ys, None
 
 
