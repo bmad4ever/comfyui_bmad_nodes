@@ -1354,8 +1354,8 @@ class MorphologicOperation:
         return {
             "required": {
                 "src": ("IMAGE",),
-                "operation": (s.operations, s.operations),
-                "kernel_type": (s.kernel_types, s.kernel_types),
+                "operation": (s.operations, {"default": s.operations[0]}),
+                "kernel_type": (s.kernel_types, {"default": s.kernel_types[0]}),
                 "kernel_size_x": ("INT", {"default": 4, "min": 2, "step": 2}),
                 "kernel_size_y": ("INT", {"default": 4, "min": 2, "step": 2}),
                 "iterations": ("INT", {"default": 1, "step": 1}),
