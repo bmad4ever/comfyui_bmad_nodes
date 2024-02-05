@@ -2105,6 +2105,53 @@ class RemapFromQuadrilateral(RemapBase):
         return (remap_data,)
 
 
+class RemapWarpPolar(RemapBase):
+    MAX_RADIUS = {
+        "half min shape": lambda shape: np.min(shape[:2])/2,
+        "half max shape": lambda shape: np.max(shape[:2]) / 2,
+        "hypot": lambda shape: np.hypot(shape[1]/2, shape[0]/2),
+        "raw": lambda _: 1   # uses value set by radius_adjust
+    }
+    MAX_RADIUS_KEYS = list(MAX_RADIUS.keys())
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "max_radius": (s.MAX_RADIUS_KEYS, {"default": s.MAX_RADIUS_KEYS[0]}),
+            "radius_adjust": ("FLOAT", {"default": 1, "min": .1, "max": 2048, "step": 0.01}),
+            "center_x_adjust": ("FLOAT", {"default": 0, "min": -3, "max": 3, "step": 0.01}),
+            "center_y_adjust": ("FLOAT", {"default": 0, "min": -3, "max": 3, "step": 0.01}),
+            "log": ("BOOLEAN", {"default": False}),
+            "inverse": ("BOOLEAN", {"default": True})
+        }
+        }
+
+    @staticmethod
+    def warp(custom_data, src, interpolation, mask=None):
+        max_radius, radius_adj, center_x_adj, center_y_adj, log, inverse = custom_data
+
+        center = (src.shape[1]/2 + src.shape[1]/2*center_x_adj, src.shape[0]/2 + src.shape[0]/2*center_y_adj)
+        radius = RemapWarpPolar.MAX_RADIUS[max_radius](src.shape)*radius_adj
+        flags = interpolation | cv.WARP_FILL_OUTLIERS
+        flags |= cv.WARP_POLAR_LOG if log else cv.WARP_POLAR_LINEAR
+        if inverse:
+            flags |= cv.WARP_INVERSE_MAP
+
+        img = cv.warpPolar(src, (src.shape[1], src.shape[0]), center, radius, flags)
+        if mask is not None:
+            mask = cv.warpPolar(mask, (mask.shape[1], mask.shape[0]), center, radius, flags)
+        return img, mask, None
+
+    def send_remap(self, max_radius, radius_adjust, center_x_adjust, center_y_adjust, log, inverse):
+        remap_data = {
+            "func": lambda _, mr, ra, cx, cy, l, i: (mr, ra, cx, cy, l, i),  # does nothing, just returns args
+            "xargs": [max_radius, radius_adjust, center_x_adjust, center_y_adjust, log, inverse],
+            "custom": RemapWarpPolar.warp
+        }
+        return (remap_data,)
+
+
+
 # endregion
 
 
@@ -2256,6 +2303,7 @@ NODE_CLASS_MAPPINGS = {
     "RemapFromInsideParabolas": RemapFromInsideParabolas,
     "RemapToQuadrilateral": RemapQuadrilateral,
     "RemapFromQuadrilateral (homography)": RemapFromQuadrilateral,
+    "RemapWarpPolar": RemapWarpPolar,
 
     "MaskOuterBlur": MaskOuterBlur
 }
