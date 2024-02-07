@@ -2122,13 +2122,14 @@ class RemapWarpPolar(RemapBase):
             "center_x_adjust": ("FLOAT", {"default": 0, "min": -3, "max": 3, "step": 0.01}),
             "center_y_adjust": ("FLOAT", {"default": 0, "min": -3, "max": 3, "step": 0.01}),
             "log": ("BOOLEAN", {"default": False}),
-            "inverse": ("BOOLEAN", {"default": True})
+            "inverse": ("BOOLEAN", {"default": True}),
+            "crop": ("BOOLEAN", {"default": True})
         }
         }
 
     @staticmethod
     def warp(custom_data, src, interpolation, mask=None):
-        max_radius, radius_adj, center_x_adj, center_y_adj, log, inverse = custom_data
+        max_radius, radius_adj, center_x_adj, center_y_adj, log, inverse, crop = custom_data
 
         center = (src.shape[1]/2 + src.shape[1]/2*center_x_adj, src.shape[0]/2 + src.shape[0]/2*center_y_adj)
         radius = RemapWarpPolar.MAX_RADIUS[max_radius](src.shape)*radius_adj
@@ -2140,12 +2141,19 @@ class RemapWarpPolar(RemapBase):
         img = cv.warpPolar(src, (src.shape[1], src.shape[0]), center, radius, flags)
         if mask is not None:
             mask = cv.warpPolar(mask, (mask.shape[1], mask.shape[0]), center, radius, flags)
+
+        if crop:
+            left, right = int(max(center[0] - radius, 0)), int(min(center[0] + radius, src.shape[1]))
+            top, bottom = int(max(center[1] - radius, 0)), int(min(center[1] + radius, src.shape[0]))
+            img  =  img[top:bottom, left:right]
+            mask = mask[top:bottom, left:right]
+
         return img, mask, None
 
-    def send_remap(self, max_radius, radius_adjust, center_x_adjust, center_y_adjust, log, inverse):
+    def send_remap(self, max_radius, radius_adjust, center_x_adjust, center_y_adjust, log, inverse, crop):
         remap_data = {
-            "func": lambda _, mr, ra, cx, cy, l, i: (mr, ra, cx, cy, l, i),  # does nothing, just returns args
-            "xargs": [max_radius, radius_adjust, center_x_adjust, center_y_adjust, log, inverse],
+            "func": lambda _, mr, ra, cx, cy, l, i, c: (mr, ra, cx, cy, l, i, c),  # does nothing, just returns args
+            "xargs": [max_radius, radius_adjust, center_x_adjust, center_y_adjust, log, inverse, crop],
             "custom": RemapWarpPolar.warp
         }
         return (remap_data,)
