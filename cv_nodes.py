@@ -1937,7 +1937,7 @@ class RemapStretch(RemapBase):
         from .utils.remaps import remap_pinch_or_stretch
         return ({
                     "func": remap_pinch_or_stretch,
-                    "xargs": [(1/power_x, 1/power_y), (center_x, center_y)]
+                    "xargs": [(1 / power_x, 1 / power_y), (center_x, center_y)]
                 },)
 
 
@@ -1946,12 +1946,12 @@ class RemapBarrelDistortion(RemapBase):
     def BARREL_DIST_TYPES():
         return {
             "required":
-            {
-                "a": ("FLOAT", {"default": 0, "step": 0.00001}),
-                "b": ("FLOAT", {"default": 0, "step": 0.00001}),
-                "c": ("FLOAT", {"default": 0, "step": 0.00001}),
-                "use_inverse_variant": ("BOOLEAN", {"default": True})
-            },
+                {
+                    "a": ("FLOAT", {"default": 0, "min": -10, "max": 10, "step": 0.00001}),
+                    "b": ("FLOAT", {"default": 0, "min": -10, "max": 10, "step": 0.00001}),
+                    "c": ("FLOAT", {"default": 0, "min": -10, "max": 10, "step": 0.00001}),
+                    "use_inverse_variant": ("BOOLEAN", {"default": True})
+                },
             "optional": {
                 "d": ("FLOAT", {"forceInput": True})
             }
@@ -1960,9 +1960,9 @@ class RemapBarrelDistortion(RemapBase):
     @classmethod
     def INPUT_TYPES(s):
         return RemapBarrelDistortion.BARREL_DIST_TYPES()
-        #inputs = RemapBarrelDistortion.BARREL_DIST_F_TYPES()
-        #inputs["required"]["use_inverse_variant"] = ("BOOLEAN", {"default": True})
-        #return inputs
+        # inputs = RemapBarrelDistortion.BARREL_DIST_F_TYPES()
+        # inputs["required"]["use_inverse_variant"] = ("BOOLEAN", {"default": True})
+        # return inputs
 
     def send_remap(self, a, b, c, use_inverse_variant, d=None):
         from .utils.remaps import remap_barrel_distortion
@@ -2083,7 +2083,7 @@ class RemapFromQuadrilateral(RemapBase):
     def INPUT_TYPES(s):
         return {"required": {
             "src_mask_with_4_points": ("MASK",),
-            #"mode": (s.modes_list, {"default": s.modes_list[0]}),
+            # "mode": (s.modes_list, {"default": s.modes_list[0]}),
             "width": ("INT", {"default": 512, "min": 16, "max": 4096}),
             "height": ("INT", {"default": 512, "min": 16, "max": 4096}),
         }
@@ -2107,10 +2107,10 @@ class RemapFromQuadrilateral(RemapBase):
 
 class RemapWarpPolar(RemapBase):
     MAX_RADIUS = {
-        "half min shape": lambda shape: np.min(shape[:2])/2,
+        "half min shape": lambda shape: np.min(shape[:2]) / 2,
         "half max shape": lambda shape: np.max(shape[:2]) / 2,
-        "hypot": lambda shape: np.hypot(shape[1]/2, shape[0]/2),
-        "raw": lambda _: 1   # uses value set by radius_adjust
+        "hypot": lambda shape: np.hypot(shape[1] / 2, shape[0] / 2),
+        "raw": lambda _: 1  # uses value set by radius_adjust
     }
     MAX_RADIUS_KEYS = list(MAX_RADIUS.keys())
 
@@ -2131,8 +2131,9 @@ class RemapWarpPolar(RemapBase):
     def warp(custom_data, src, interpolation, mask=None):
         max_radius, radius_adj, center_x_adj, center_y_adj, log, inverse, crop = custom_data
 
-        center = (src.shape[1]/2 + src.shape[1]/2*center_x_adj, src.shape[0]/2 + src.shape[0]/2*center_y_adj)
-        radius = RemapWarpPolar.MAX_RADIUS[max_radius](src.shape)*radius_adj
+        center = (
+        src.shape[1] / 2 + src.shape[1] / 2 * center_x_adj, src.shape[0] / 2 + src.shape[0] / 2 * center_y_adj)
+        radius = RemapWarpPolar.MAX_RADIUS[max_radius](src.shape) * radius_adj
         flags = interpolation | cv.WARP_FILL_OUTLIERS
         flags |= cv.WARP_POLAR_LOG if log else cv.WARP_POLAR_LINEAR
         if inverse:
@@ -2145,7 +2146,7 @@ class RemapWarpPolar(RemapBase):
         if crop:
             left, right = int(max(center[0] - radius, 0)), int(min(center[0] + radius, src.shape[1]))
             top, bottom = int(max(center[1] - radius, 0)), int(min(center[1] + radius, src.shape[0]))
-            img  =  img[top:bottom, left:right]
+            img = img[top:bottom, left:right]
             mask = mask[top:bottom, left:right]
 
         return img, mask, None
@@ -2157,7 +2158,6 @@ class RemapWarpPolar(RemapBase):
             "custom": RemapWarpPolar.warp
         }
         return (remap_data,)
-
 
 
 # endregion
