@@ -1,4 +1,4 @@
-import { app } from "/scripts/app.js";
+import { app } from "../../scripts/app.js";
 
 function RemoveUnnamedOutputs(node){
     for (let i = node.outputs.length-1; i >= 0; i--)

@@ -1,4 +1,4 @@
-import { app } from "/scripts/app.js";
+import { app } from "../../scripts/app.js";
 
 var mi_node_types = {
     "VAEEncodeBatch": "IMAGE",

@@ -1,4 +1,4 @@
-import { app } from "/scripts/app.js";
+import { app } from "../../scripts/app.js";
 
 var potentially_dangerous_nodes = [
     "BuildColorRangeAdvanced (hsv)",
