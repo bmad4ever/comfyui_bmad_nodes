@@ -17,31 +17,9 @@ def xy_pixel_indexes(img, swap=False):
 
 
 def quadratic_formulae(a, b, c):
-    # should I use np.root instead? mind that a is an array
     vs = np.sqrt(b ** 2 - 4 * a * c)
     a2 = a * 2
     return (-b - vs) / a2, (-b + vs) / a2
-
-
-def debug_draw_outer_cylinder_proj(z0, r, f, o):
-    """
-    Debug remap_outer_cylinder
-    """
-    import matplotlib.pyplot as plt
-    figure, axes = plt.subplots()
-    draw_circle = plt.Circle((0, z0), r, fill=False)
-    axes.set_aspect(1)
-    plt.xlim(-r * 1.5, r * 1.5)
-    plt.ylim(0, f + r * 2)
-    axes.add_artist(draw_circle)
-    x = np.linspace(-r * 1.15, r * 1.15, 2)
-    z = f / o * x  # function
-    plt.plot(x, z)
-    plt.plot(x, -z)
-    x = np.linspace(-o, o, 2)
-    plt.plot(x, [f] * len(x))
-    plt.title('Debug Cylinder Projection')
-    plt.savefig('plot_cylinder_projection.png')
 
 
 def remap_inner_cylinder(src: ndarray, fov=90, swap_xy=False):
@@ -98,13 +76,11 @@ def remap_outer_cylinder(src: ndarray, fov=90, swap_xy=False):
     omega = w / 2
     f = omega / ratio
 
-    m = f / omega;
-    k = m + m ** -1;
+    m = f / omega
+    k = m + m ** -1
     n = 1 - (1 / (1 + m ** -2))
     _, z0 = quadratic_formulae(a=1 - k ** -2 - n ** 2, b=-2 * f, c=f ** 2)
     r = z0 - f
-
-    # debug_draw_outer_cylinder_proj(z0, r, f, omega)  # if the behavior is not clear, draw this
 
     zc, _ = quadratic_formulae((pc[0] ** 2) / (f ** 2) + 1, -2 * z0, z0 ** 2 - r ** 2)
     final_point = [pc[0] * zc / f, pc[1] * zc / f]
@@ -153,10 +129,10 @@ def lens_undistort(r: ndarray | float, a: float, b: float, c: float, d: float | 
 
 
 def lens_undistort_inv(r: ndarray | float, a: float, b: float, c: float, d: float | None = None):
-        a, b, c = -a, -b, -c
-        if d is None:
-            d = 1 - (a + b + c)
-        return r / (a * r ** 3 + b * r ** 2 + c * r + d)
+    a, b, c = -a, -b, -c
+    if d is None:
+        d = 1 - (a + b + c)
+    return r / (a * r ** 3 + b * r ** 2 + c * r + d)
 
 
 def remap_barrel_distortion(src: ndarray, a: float, b: float, c: float, d: float | None, inverse: bool):
@@ -199,7 +175,7 @@ def remap_reverse_barrel_distortion(src: ndarray, a: float, b: float, c: float, 
 
     radii, radians = cv.cartToPolar(xs, ys, angleInDegrees=False)
     min_whr = min(radii[0, src.shape[1] // 2], radii[src.shape[0] // 2, 0])
-    rs = radii/min_whr
+    rs = radii / min_whr
 
     def compute_roots(poly, j, i):
         return next(
@@ -229,6 +205,7 @@ def remap_reverse_barrel_distortion(src: ndarray, a: float, b: float, c: float, 
             from scipy.optimize import dual_annealing
             ret = dual_annealing(fn, bounds=list(zip([0], [2])))
             return ret.x
+
         mrs = find_scaled_max_rs(lambda r: abs(max_rs - lens_undistort_inv(r, a, b, c)))
         small_rs *= mrs / max_rs
         big_rs = lens_undistort_inv(small_rs, a, b, c)
@@ -358,10 +335,10 @@ def get_parabolas_edges_xs(ws, bottom_parabola, top_parabola):
     """
     get left and right edges of all parabolas segments between bottom and top parabolas' segments
     """
-    p0x, p0y = np.min(bottom_parabola, axis=0)
-    p2x, p2y = np.max(bottom_parabola, axis=0)
-    p3x, p3y = np.min(top_parabola, axis=0)
-    p5x, p5y = np.max(top_parabola, axis=0)
+    p0x, _ = np.min(bottom_parabola, axis=0)
+    p2x, _ = np.max(bottom_parabola, axis=0)
+    p3x, _ = np.min(top_parabola, axis=0)
+    p5x, _ = np.max(top_parabola, axis=0)
     leftmost_xs = ws * p0x + (1 - ws) * p3x
     rightmost_xs = ws * p2x + (1 - ws) * p5x
     return leftmost_xs, rightmost_xs
@@ -370,7 +347,7 @@ def get_parabolas_edges_xs(ws, bottom_parabola, top_parabola):
 def remap_inside_parabolas(src, roi_img, recalled=False):
     """
     Generic implementation applied to both simple and advanced parabola remaps.
-    @param roi_points_img: dst sized mask with the 6 points annotated
+    @param roi_img: dst sized mask with the 6 points annotated
     @param recalled: safeguard against infinite recursive calls.
     @return: @return: x and y mappings ( to the original image pixels ) and roi bounding box coordinates
     """
@@ -378,8 +355,8 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
 
     match validate_parabolas(polylines, endpoints):
         case 2:
-            raise ("Couldn't match two endpoints to one of the contours."
-                   "It may be the case that the parabolas are too flat.")
+            raise Exception("Couldn't match two endpoints to one of the contours."
+                            "It may be the case that the parabolas are too flat.")
         case 1:  # current orientation won't work
             if not recalled:  # shouldn't get stuck, if equal proceeds; but will use a safeguard against potential oversights!
                 xs, ys, bb, _ = remap_inside_parabolas(cv.rotate(src, cv.ROTATE_90_CLOCKWISE)
@@ -390,8 +367,6 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
             # -- raise(...) -- no longer raise exception:
             # it will likely result in a messy map,
             # but may also work fine on some cases.
-        case _:
-            pass
 
     # get parabolas by Y coordinate
     top_parabola, bottom_parabola = sorted(polylines, key=lambda pl: max(p[1] for p in pl))
@@ -460,7 +435,7 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
     ys_norm[ys_norm < 0] = -10
 
     # compute xs
-    xs_pxs = np.array([[x + origin[0] for x in range(dst_box_width)] for y in range(dst_box_height)]).astype(np.float32)
+    xs_pxs = np.array([[x + origin[0] for x in range(dst_box_width)] for _ in range(dst_box_height)]).astype(np.float32)
     xs_norm = compute_x_norm(ys_norm, xs_pxs)
     # outside roi clip is already done by compute_x_norm in previous step
 
@@ -473,14 +448,15 @@ def remap_inside_parabolas(src, roi_img, recalled=False):
 
 def get_parabolas_pair(roi_img):
     import skimage
-    ret, roi_points_img = cv.threshold(roi_img, 127, 255, cv.THRESH_BINARY)
+    _, roi_points_img = cv.threshold(roi_img, 127, 255, cv.THRESH_BINARY)
     skeleton = skimage.img_as_ubyte(skimage.morphology.skeletonize(roi_img))
     endpoints = find_endpoints(skeleton)
 
     contours, _ = cv.findContours(skeleton, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
 
     if len(contours) != 2:
-        raise (f"Parabola Remap requires exactly 2 drawn lines, however it obtained {len(contours)} contours.")
+        raise ValueError(f"Parabola Remap requires exactly 2 drawn lines,"
+                         f" however it obtained {len(contours)} contours.")
 
     # it is not a closed contour, but it should be easier to get the endpoints this way
     # the endpoints should be in the polyline to validate the input in the next step
@@ -574,8 +550,8 @@ def remap_from_inside_parabolas(_, roi_img, dst_width: int, dst_height: int, rec
 
     match validate_parabolas(polylines, endpoints):
         case 2:
-            raise ("Couldn't match two endpoints to one of the contours."
-                   "It may be the case that the parabolas are too flat.")
+            raise Exception("Couldn't match two endpoints to one of the contours."
+                            "It may be the case that the parabolas are too flat.")
         case 1:  # current orientation won't work
             if not recalled:  # shouldn't get stuck, if equal proceeds; but will use a safeguard against potential oversights!
                 xs, ys, _ = remap_from_inside_parabolas(None,
@@ -585,8 +561,6 @@ def remap_from_inside_parabolas(_, roi_img, dst_width: int, dst_height: int, rec
             # -- raise(...) -- no longer raise exception:
             # it will likely result in a messy map,
             # but may also work fine on some cases.
-        case _:
-            pass
 
     # get parabolas by Y coordinate
     top_parabola, bottom_parabola = sorted(polylines, key=lambda pl: max(p[1] for p in pl))
@@ -597,7 +571,7 @@ def remap_from_inside_parabolas(_, roi_img, dst_width: int, dst_height: int, rec
 
     # get all points' parabolas coefficients
     h_m1 = dst_height - 1
-    ws = np.array([j / h_m1 for j in range(dst_height) for i in range(dst_width)]).reshape(dst_height, dst_width)
+    ws = np.array([j / h_m1 for j in range(dst_height) for _ in range(dst_width)]).reshape(dst_height, dst_width)
     a_b_c_s = ws[:, :, np.newaxis] * c1_coeffs + (1 - ws[:, :, np.newaxis]) * c2_coeffs
     a = a_b_c_s[:, :, 0]
     b = a_b_c_s[:, :, 1]
@@ -610,8 +584,6 @@ def remap_from_inside_parabolas(_, roi_img, dst_width: int, dst_height: int, rec
     # compute xs & ys
     xs = compute_x(a, b, leftmost_xs, rightmost_xs, x).astype(np.float32)
     ys = compute_ys(xs, a, b, c).astype(np.float32)
-
-    # img_remap = cv.remap(src, xs, ys, cv.INTER_LINEAR)
     return xs, ys, None
 
 
@@ -623,11 +595,14 @@ def remap_from_inside_parabolas(_, roi_img, dst_width: int, dst_height: int, rec
 
 def compute_homography(
         src, origin, sorted_dst_pts
-        # upper_left_corner, upper_right_corner, bottom_left_corner, bottom_right_corner,
-        # bottom_left_corner, bottom_right_corner, origin, src, upper_left_corner, upper_right_corner
 ):
+    """
+    @param src: source image ( to apply the transformation to )
+    @param origin: dst quad bounding box top-left corner
+    @param sorted_dst_pts: the dst quad points sorted from left to right and top to bottom
+    @return: homography matrix
+    """
     src_pts = [[0, 0], [src.shape[1], 0], [0, src.shape[0]], [src.shape[1], src.shape[0]]]
-    # dst_pts = [upper_left_corner, upper_right_corner, bottom_left_corner, bottom_right_corner]
     src_pts, dst_pts = np.array(src_pts).astype(np.float32), np.array(sorted_dst_pts).astype(np.float32)
     dst_pts -= origin
     h_matrix = cv.getPerspectiveTransform(src_pts, dst_pts)
@@ -659,7 +634,8 @@ def remap_quadrilateral_edge_pairs_interpolation(
         """
         if pt1[0] == pt2[0]:
             if limit_m is None:
-                raise ("invalid input; adjacent points with equal x!")  # this should never happen if input is valid!
+                # this should never happen if input is valid!
+                raise ValueError("invalid input; adjacent points with equal x!")
             else:
                 return limit_m
 
@@ -724,9 +700,7 @@ def remap_quadrilateral_lengthwise(
     """
 
     a_x, a_y = upper_left_corner
-    # b_x, b_y = upper_right_corner
     c_x, c_y = bottom_left_corner
-    # d_x, d_y = bottom_right_corner
     ab = (np.array(upper_right_corner) - np.array(upper_left_corner)).astype(np.float32)
     cd = (np.array(bottom_right_corner) - np.array(bottom_left_corner)).astype(np.float32)
     ab_x, ab_y = ab
@@ -755,7 +729,7 @@ def remap_quadrilateral_lengthwise(
                     (4 * a_x * ab_y - 2 * a_y * ab_x) * c_y - 2 * a_y * ab_y * c_x) * cd_x +
             ab_x ** 2 * c_y ** 2 - 2 * ab_x * ab_y * c_x * c_y + ab_y ** 2 * c_x ** 2
         ) + (ab_x - cd_x) * ys + (cd_y - ab_y) * xs - a_x * cd_y + a_y * cd_x - ab_x * c_y + ab_y * c_x) / (
-                       2 * ab_x * cd_y - 2 * ab_y * cd_x)
+                2 * ab_x * cd_y - 2 * ab_y * cd_x)
 
     def compute_ys_norm(ys, xs, px, a, ab, c, cd):
         px = px[:, :, np.newaxis]
@@ -808,6 +782,10 @@ def remap_quadrilateral(src: ndarray, roi_img: ndarray, method: str) -> tuple[nd
 
 
 def get_quad_bounding_box(quad_corners: list[tuple[int, int]]) -> tuple[list[int], int, int, tuple[int, int]]:
+    """
+    @param quad_corners: unordered quad corners
+    @return: bounding box (bb) corners, bb width, bb height, origin ( bb top-left corner )
+    """
     bb = [
         min([c[0] for c in quad_corners])
         , min([c[1] for c in quad_corners])
@@ -836,7 +814,7 @@ def get_ordered_corners(quad_corners: list[tuple[int, int]]) -> list[tuple[int, 
 
 
 def get_quad_corners(roi_img) -> list[tuple[int, int]]:
-    contours, hierarchy = cv.findContours(roi_img, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv.findContours(roi_img, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
     moments = [cv.moments(c) for c in contours]
     centers = [(int(m["m10"] / m["m00"]), int(m["m01"] / m["m00"])) for m in moments]
     return centers
@@ -848,7 +826,6 @@ def remap_from_quadrilateral(_, roi_img: ndarray, dst_width: int, dst_height: in
     quad_corners = get_quad_corners(roi_img)
     quad_corners = get_ordered_corners(quad_corners)
 
-    # src_pts = [upper_left_corner, upper_right_corner, bottom_left_corner, bottom_right_corner]
     dst_pts = [[0, 0], [dst_width, 0], [0, dst_height], [dst_width, dst_height]]
     dst_bb = [0, 0, dst_width, dst_height]
 
