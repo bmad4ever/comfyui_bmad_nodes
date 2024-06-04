@@ -13,6 +13,7 @@ color255_INPUT = ("INT", {
     "step": 1
 })
 
+
 def setup_color_to_correct_type(color):
     if color is None:
         return None
@@ -33,9 +34,9 @@ class ColorClip:
     CATEGORY = "Bmad/image"
 
     @classmethod
-    def get_types(self, advanced=False):
+    def get_types(cls, advanced=False):
         types = {"required": {"image": ("IMAGE",)}}
-        operations = self.OPERATION[2:] if advanced else self.OPERATION[0:3]
+        operations = cls.OPERATION[2:] if advanced else cls.OPERATION[0:3]
         types["required"]["target"] = (operations, {"default": operations[0]})
         types["required"]["complement"] = (operations, {"default": operations[1]})
         types["required"]["color"] = ("COLOR",)
@@ -111,9 +112,9 @@ def compute_normalized_inverse_squared_difference_matrix(image, target_color, po
                         (technically not squared unless power = 2)
         and the target color.
     """
-    max_distance = (255 ** 2 * 3) ** (1/2)
+    max_distance = (255 ** 2 * 3) ** (1 / 2)
     squared_diff_matrix = np.sqrt(np.sum(abs(image - target_color) ** 2, axis=2))
-    inverse_squared_diff_matrix = 2 / (1 + (squared_diff_matrix/max_distance)**power) - 1
+    inverse_squared_diff_matrix = 2 / (1 + (squared_diff_matrix / max_distance) ** power) - 1
     return inverse_squared_diff_matrix
 
 
@@ -166,10 +167,8 @@ def find_complementary_color(image, color_dict, mask=None, power=2):
     closest_color = None
 
     if mask is not None:
-        mask = mask[:, :]/255
+        mask = mask[:, :] / 255
         non_zero_count = np.count_nonzero(mask)  # compute only once and wrap within sent arg
-        #print(mask)
-        #print(len(mask[0]))
         mask = (mask, non_zero_count)
 
     for color_name, color_rgb in color_dict.items():
@@ -194,8 +193,8 @@ class Interval:
 
         if center != 0:
             if center < self.value[0] or center > self.value[1]:
-                raise Exception(f"Invalid center. Center must be contained within lower and upper bounds:"
-                                f" [{bounds}], but got -> {center}")
+                raise ValueError(f"Invalid center. Center must be contained within lower and upper bounds:"
+                                 f" [{bounds}], but got -> {center}")
             left_interval = center - bounds[0]
             right_interval = bounds[1] - center
             return Interval([center - left_interval * scale_factor, center + right_interval * scale_factor])
@@ -366,9 +365,9 @@ class HSV_Samples:
     @lru_cache(maxsize=2)
     def h_quant2(self, lower, upper) -> Interval:
         if lower > 0.5 or upper < 0.5:
-            raise ("Arguments outside of expected range"
-                   "\nexpected: lower <= 0.5 <= higher"
-                   f"\ngot: lower={lower} and higher={upper}")
+            raise ValueError("Arguments outside of expected range"
+                             "\nexpected: lower <= 0.5 <= higher"
+                             f"\ngot: lower={lower} and higher={upper}")
 
         center_rads = np.deg2rad(self.h_median * 2)
         bounds = circ_quantiles(self.hues_rads, center_rads, [lower, upper])
