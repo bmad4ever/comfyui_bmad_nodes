@@ -9,9 +9,6 @@ class ConditioningGridStr_ADVEncode:
     Each conditioning obtained from the text inputs is then used as input for the Grid's AreaConditioners.
     """
 
-    def __init__(self):
-        pass
-
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {

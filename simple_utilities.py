@@ -88,9 +88,6 @@ class RepeatIntoGridLatent:
     Tiles the input samples into a grid of configurable dimensions.
     """
 
-    def __init__(self):
-        pass
-
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {"samples": ("LATENT",),
@@ -114,9 +111,6 @@ class RepeatIntoGridImage:
     """
     Tiles the input samples into a grid of configurable dimensions.
     """
-
-    def __init__(self):
-        pass
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -190,9 +184,6 @@ class ConditioningGridCond:
         maximum size but only a selected number of columns or rows given via input are used.
     """
 
-    def __init__(self):
-        pass
-
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {
@@ -229,9 +220,6 @@ class ConditioningGridStr:
     Node similar to ConditioningGridCond, but automates an additional step, using a ClipTextEncode per text input.
     Each conditioning obtained from the text inputs is then used as input for the Grid's AreaConditioners.
     """
-
-    def __init__(self):
-        pass
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -273,9 +261,6 @@ class CombineMultipleConditioning:
 
     # TODO: consider implementing similar node for gligen
 
-    def __init__(self):
-        pass
-
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {
@@ -306,9 +291,6 @@ class CombineMultipleSelectiveConditioning:
     """
 
     # TODO: consider implementing similar node for gligen
-
-    def __init__(self):
-        pass
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -342,9 +324,6 @@ class AddString2Many:
     """
 
     OPERATION = ["append", "prepend"]
-
-    def __init__(self):
-        pass
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -429,8 +408,6 @@ class AdjustRect:
 
 
 class VAEEncodeBatch:
-    def __init__(self):
-        pass
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -459,9 +436,6 @@ class VAEEncodeBatch:
 
 
 class AnyToAny:
-    def __init__(self):
-        pass
-
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {
