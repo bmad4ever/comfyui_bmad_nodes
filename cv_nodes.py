@@ -1,16 +1,17 @@
-import math
 from abc import ABC
-
+import numpy as np
 import cv2 as cv
-
-from .utils.dry import *
-from .utils.color import *
+import math
+from .utils.dry import (tensor2opencv, opencv2tensor, image_output_formats_options, rect_modes, rect_modes_map,
+                        maybe_convert_img, image_output_formats_options_map, prepare_text_for_eval, cache_with_ids,
+                        filter_expression_names, base_category_path, images_category_path, print_yellow)
+from .utils.color import (ImageColor, setup_color_to_correct_type, find_complementary_color, HSV_Samples, Interval)
 
 # TODO these nodes return the mask, not the image with the background removed!
 #       this is somewhat misleading. Consider changing the methods names.
 #       ( but to what? GrabCutMask? FramedMaskGrabCutMask? ...)
 
-# region types
+# region types and constants
 
 thresh_types_map = {
     'BINARY': cv.THRESH_BINARY,
@@ -50,6 +51,7 @@ interpolation_types_map = {
 }
 interpolation_types = list(interpolation_types_map.keys())
 
+cv_category_path = f"{base_category_path}/CV"
 
 # endregion
 
@@ -58,7 +60,7 @@ interpolation_types = list(interpolation_types_map.keys())
 
 class CopyMakeBorderSimple:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image": ("IMAGE",),
@@ -68,7 +70,7 @@ class CopyMakeBorderSimple:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "make_border"
-    CATEGORY = "Bmad/CV/Misc"
+    CATEGORY = f"{cv_category_path}/Misc"
 
     def make_border(self, image, border_size, border_type):
         image = tensor2opencv(image, 0)
@@ -88,15 +90,15 @@ class ConvertImg:
     options = list(options_map.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "image": ("IMAGE",),
-            "to": (s.options, {"default": s.options[1]})
+            "to": (cls.options, {"default": cls.options[1]})
         }}
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "convert"
-    CATEGORY = "Bmad/CV"
+    CATEGORY = f"{cv_category_path}"
 
     def convert(self, image, to):
         image = tensor2opencv(image, self.options_map[to])
@@ -107,20 +109,20 @@ class AddAlpha:
     method = ["default", "invert"]
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "rgb_image": ("IMAGE",),
             },
             "optional": {
                 "alpha": ("IMAGE",),
-                "method": (s.method, {"default": s.method[0]}),
+                "method": (cls.method, {"default": cls.method[0]}),
             }
         }
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "add_alpha"
-    CATEGORY = "Bmad/image"
+    CATEGORY = images_category_path
 
     def add_alpha(self, rgb_image, alpha=None, method=None):
         rgb_image = tensor2opencv(rgb_image, 3)
@@ -145,7 +147,7 @@ class FadeMaskEdges:
     """
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "binary_image": ("IMAGE",),
@@ -161,7 +163,7 @@ class FadeMaskEdges:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "apply"
-    CATEGORY = "Bmad/CV/Misc"
+    CATEGORY = f"{cv_category_path}/Misc"
 
     def apply(self, binary_image, edge_size, edge_tightness, edge_exponent, smoothing_diameter, paste_original_blacks):
         binary_image = tensor2opencv(binary_image, 1)
@@ -205,7 +207,7 @@ class FramedMaskGrabCut:
     frame_options = list(frame_options_values.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image": ("IMAGE",),
@@ -222,8 +224,8 @@ class FramedMaskGrabCut:
                     "max": 100,
                     "step": 1
                 }),
-                "frame_option": (s.frame_options, {
-                    "default": s.frame_options[0]
+                "frame_option": (cls.frame_options, {
+                    "default": cls.frame_options[0]
                 }),
 
                 # to only use PR FGD set threshold_FGD to 0
@@ -249,7 +251,7 @@ class FramedMaskGrabCut:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "grab_cut"
-    CATEGORY = "Bmad/CV/GrabCut"
+    CATEGORY = f"{cv_category_path}/GrabCut"
 
     def grab_cut(self, image, thresh, iterations, margin, frame_option, threshold_FGD, threshold_PR_FGD, output_format):
         image = tensor2opencv(image)
@@ -302,7 +304,7 @@ class RectGrabCut:
     # TODO maybe add option to exclude PR_BGD or include PR_FGD in outputMask
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image": ("IMAGE",),
@@ -345,7 +347,7 @@ class RectGrabCut:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "grab_cut"
 
-    CATEGORY = "Bmad/CV/GrabCut"
+    CATEGORY = f"{cv_category_path}/GrabCut"
 
     def grab_cut(self, image, iterations, x1, y1, x2, y2, output_format):
         image = tensor2opencv(image)
@@ -386,7 +388,7 @@ class FramedMaskGrabCut2:
     }
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image": ("IMAGE",),
@@ -404,7 +406,7 @@ class FramedMaskGrabCut2:
                     "max": 100,
                     "step": 1
                 }),
-                "frame_option": (s.frame_options, {
+                "frame_option": (cls.frame_options, {
                     "default": 'FULL_FRAME'
                 }),
                 # source thresh may not be only 0s and 1s, use this as a safeguard
@@ -424,7 +426,7 @@ class FramedMaskGrabCut2:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "grab_cut"
 
-    CATEGORY = "Bmad/CV/GrabCut"
+    CATEGORY = f"{cv_category_path}/GrabCut"
 
     def grab_cut(self, image, thresh_maybe, thresh_sure, iterations,
                  margin, frame_option, binary_threshold,
@@ -501,18 +503,18 @@ class Contours:
     retrieval_modes = list(retrieval_modes_map.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image": ("IMAGE",),
-                "retrieval_mode": (s.retrieval_modes, {"default": "RETR_LIST"}),
-                "approximation_mode": (s.approximation_modes, {"default": "CHAIN_APPROX_SIMPLE"}),
+                "retrieval_mode": (cls.retrieval_modes, {"default": "RETR_LIST"}),
+                "approximation_mode": (cls.approximation_modes, {"default": "CHAIN_APPROX_SIMPLE"}),
             },
         }
 
     RETURN_TYPES = ("CV_CONTOURS", "CV_CONTOUR", "CV_CONTOURS_HIERARCHY")
     FUNCTION = "find_contours"
-    CATEGORY = "Bmad/CV/Contour"
+    CATEGORY = f"{cv_category_path}/Contour"
     OUTPUT_IS_LIST = (False, True, False)
 
     def find_contours(self, image, retrieval_mode, approximation_mode):
@@ -532,7 +534,7 @@ class Contours:
 
 class DrawContours:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image": ("IMAGE",),
@@ -556,7 +558,7 @@ class DrawContours:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "draw"
 
-    CATEGORY = "Bmad/CV/Contour"
+    CATEGORY = f"{cv_category_path}/Contour"
 
     def draw(self, image, contours, index_to_draw, color, thickness):
         background = tensor2opencv(image)
@@ -572,7 +574,7 @@ class DrawContours:
 
 class GetContourFromList:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "contours": ("CV_CONTOURS",),
@@ -582,7 +584,7 @@ class GetContourFromList:
 
     RETURN_TYPES = ("CV_CONTOUR",)
     FUNCTION = "get_contour"
-    CATEGORY = "Bmad/CV/Contour"
+    CATEGORY = f"{cv_category_path}/Contour"
 
     def get_contour(self, contours, index):
         if index >= len(contours):
@@ -592,7 +594,7 @@ class GetContourFromList:
 
 class ContourGetBoundingRect:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "contour": ("CV_CONTOUR",),
@@ -600,9 +602,9 @@ class ContourGetBoundingRect:
             },
         }
 
-    RETURN_TYPES = tuple(["INT" for x in range(4)])
+    RETURN_TYPES = tuple(["INT" for _ in range(4)])
     FUNCTION = "compute"
-    CATEGORY = "Bmad/CV/Contour"
+    CATEGORY = f"{cv_category_path}/Contour"
 
     def compute(self, contour, return_mode):
         if contour is None:
@@ -631,13 +633,13 @@ class FilterContour:
     return_modes = list(return_modes_map.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "contours": ("CV_CONTOURS",),
                 "fitness": ("STRING", {"multiline": True, "default":
                     "# Contour Fitness Function\n"}),
-                "select": (s.return_modes, {"default": s.return_modes[0]})
+                "select": (cls.return_modes, {"default": cls.return_modes[0]})
             },
             "optional": {
                 "image": ("IMAGE",),
@@ -647,7 +649,7 @@ class FilterContour:
 
     RETURN_TYPES = ("CV_CONTOUR", "CV_CONTOURS")
     FUNCTION = "filter"
-    CATEGORY = "Bmad/CV/Contour"
+    CATEGORY = f"{cv_category_path}/Contour"
 
     def filter(self, contours, fitness, select, image=None, aux_contour=None):
         import math
@@ -699,13 +701,13 @@ class FilterContour:
         # useful properties; adapted from multiple sources, including cv documentation
         @cache_with_ids(single=True)
         def aspect_ratio(cnt):
-            x, y, w, h = boundingRect(cnt)
+            _, _, w, h = boundingRect(cnt)
             return float(w) / h
 
         @cache_with_ids(single=True)
         def extent(cnt):
             area = contourArea(cnt)
-            x, y, w, h = boundingRect(cnt)
+            _, _, w, h = boundingRect(cnt)
             rect_area = w * h
             return float(area) / rect_area
 
@@ -723,15 +725,15 @@ class FilterContour:
 
         @cache_with_ids(single=True)
         def center(cnt):
-            M = cv.moments(cnt)
-            cX = int(M["m10"] / M["m00"])
-            cY = int(M["m01"] / M["m00"])
-            return cX, cY
+            m = cv.moments(cnt)
+            c_x = int(m["m10"] / m["m00"])
+            c_y = int(m["m01"] / m["m00"])
+            return c_x, c_y
 
         @cache_with_ids(single=False)
         def contour_mask(cnt, img):
             if len(img.shape) > 2:
-                height, width, channels = img.shape
+                height, width, _ = img.shape
             else:
                 height, width = img.shape
 
@@ -758,8 +760,8 @@ class FilterContour:
 
         def intercepts_mask(cnt, img):  # where img should be a binary mask
             gray = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
-            intersection = cv2.bitwise_and(gray,
-                                           cv2.drawContours(np.zeros_like(gray), [cnt], 0, 255, thickness=cv2.FILLED))
+            intersection = cv2.bitwise_and(
+                gray, cv2.drawContours(np.zeros_like(gray), [cnt], 0, 255, thickness=cv2.FILLED))
             return cv2.countNonZero(intersection) > 0
 
         # endregion
@@ -782,7 +784,7 @@ class FilterContour:
 
 class ContourToMask:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image": ("IMAGE",),
@@ -795,7 +797,7 @@ class ContourToMask:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "draw"
-    CATEGORY = "Bmad/CV/Contour"
+    CATEGORY = f"{cv_category_path}/Contour"
 
     def draw(self, image, contour, output_format):
         image = tensor2opencv(image, 1)
@@ -820,13 +822,13 @@ class SeamlessClone:
     clone_modes = list(clone_modes_map.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "dst": ("IMAGE",),
                 "src": ("IMAGE",),
                 "src_mask": ("IMAGE",),
-                "flag": (s.clone_modes, {"default": s.clone_modes[0]}),
+                "flag": (cls.clone_modes, {"default": cls.clone_modes[0]}),
                 "cx": ("INT", {"default": 0, "min": -999999, "step": 1}),
                 "cy": ("INT", {"default": 0, "min": -999999, "step": 1}),
             },
@@ -834,7 +836,7 @@ class SeamlessClone:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "paste"
-    CATEGORY = "Bmad/CV/C.Photography"
+    CATEGORY = f"{cv_category_path}/C.Photography"
 
     def paste(self, src, dst, src_mask, flag, cx, cy):
         src = tensor2opencv(src)
@@ -849,7 +851,7 @@ class SeamlessClone:
 
 class SeamlessCloneSimpler:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "dst": ("IMAGE",),
@@ -861,7 +863,7 @@ class SeamlessCloneSimpler:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "paste"
-    CATEGORY = "Bmad/CV/C.Photography"
+    CATEGORY = f"{cv_category_path}/C.Photography"
 
     @staticmethod
     def get_center(cv_mask):
@@ -883,19 +885,19 @@ class Inpaint:
     inpaint_methods = list(inpaint_method_map.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "img": ("IMAGE",),
                 "mask": ("IMAGE",),
                 "radius": ("INT", {"default": 3, "min": 0, "step": 1}),
-                "flag": (s.inpaint_methods, {"default": s.inpaint_methods[0]}),
+                "flag": (cls.inpaint_methods, {"default": cls.inpaint_methods[0]}),
             },
         }
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "paint"
-    CATEGORY = "Bmad/CV/C.Photography"
+    CATEGORY = f"{cv_category_path}/C.Photography"
 
     def paint(self, img, mask, radius, flag):
         img = tensor2opencv(img)
@@ -919,7 +921,7 @@ class ChameleonMask:  # wtf would I name this node as?
     modes = list(mode_func_map.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "dst": ("IMAGE",),
@@ -930,7 +932,7 @@ class ChameleonMask:  # wtf would I name this node as?
                 "size_dist": ("INT", {"default": 8, "min": -99999, "step": 1}),
                 "mask_blur": ("INT", {"default": 64, "min": 0, "step": 2}),
                 "contrast_adjust": ("FLOAT", {"default": 2.4, "min": 0, "max": 20, "step": .5}),
-                "mode": (s.modes, {"default": s.modes[0]}),
+                "mode": (cls.modes, {"default": cls.modes[0]}),
                 "output_format": (image_output_formats_options, {
                     "default": image_output_formats_options[0]
                 }),
@@ -943,10 +945,10 @@ class ChameleonMask:  # wtf would I name this node as?
 
     RETURN_TYPES = ("IMAGE", "IMAGE",)
     FUNCTION = "create_mask"
-    CATEGORY = "Bmad/CV/C.Photography"
+    CATEGORY = f"{cv_category_path}/C.Photography"
 
     def create_mask(self, src, dst, thresh_blur, close_dist, open_dist, size_dist, mask_blur,
-                    contrast_adjust, mode, output_format, optional_roi_mask=None):
+                    contrast_adjust, mode: str, output_format, optional_roi_mask=None):
         src = tensor2opencv(src)
         dst = tensor2opencv(dst)
 
@@ -955,8 +957,8 @@ class ChameleonMask:  # wtf would I name this node as?
             mask_blur += 1
 
         # compute the difference between images based on mode
-        src = self.mode_func_map[mode](src)
-        dst = self.mode_func_map[mode](dst)
+        src = self.mode_func_map[mode](src)  # type:ignore
+        dst = self.mode_func_map[mode](dst)  # type:ignore
         diff = cv.absdiff(src, dst)
 
         if mode == "HUE":
@@ -965,7 +967,7 @@ class ChameleonMask:  # wtf would I name this node as?
         # binary thresholding
         # _, mask = cv.threshold(diff, threshold, 255, cv.THRESH_BINARY)
         diff = cv.GaussianBlur(diff, (thresh_blur, thresh_blur), 0)
-        ret3, mask = cv.threshold(diff, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
+        _, mask = cv.threshold(diff, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
         if optional_roi_mask is not None:
             optional_roi_mask = tensor2opencv(optional_roi_mask, 1)
             mask[optional_roi_mask < 127] = 0
@@ -1010,7 +1012,7 @@ class ChameleonMask:  # wtf would I name this node as?
 class OtsuThreshold:
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image": ("IMAGE",),
@@ -1034,7 +1036,7 @@ class OtsuThreshold:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "otsu_thresthold"
-    CATEGORY = "Bmad/CV/Thresholding"
+    CATEGORY = f"{cv_category_path}/Thresholding"
 
     def otsu_thresthold(self, image, threshold_type, gaussian_blur_x, gaussian_blur_y, gaussian_border_type):
         image = tensor2opencv(image, 1)
@@ -1055,13 +1057,13 @@ class AdaptiveThresholding:
     adaptive_modes = list(adaptive_modes_map.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "src": ("IMAGE",),
                 "max_value": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1}),
                 # maybe should just allow for 255? may just confuse some people that don't read documentation
-                "adaptive_method": (s.adaptive_modes, {"default": s.adaptive_modes[1]}),
+                "adaptive_method": (cls.adaptive_modes, {"default": cls.adaptive_modes[1]}),
                 "threshold_type": (thresh_types, {"default": thresh_types[0]}),
                 "block_size": ("INT", {"default": 4, "min": 2, "step": 2}),
                 "c": ("INT", {"default": 2, "min": -999, "step": 1}),
@@ -1070,13 +1072,13 @@ class AdaptiveThresholding:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "thresh"
-    CATEGORY = "Bmad/CV/Thresholding"
+    CATEGORY = f"{cv_category_path}/Thresholding"
 
     def thresh(self, src, max_value, adaptive_method, threshold_type, block_size, c):
         # maybe allow to use from a specific channel 1st? nah, just create a node to fetch the channel
         # might be useful for other nodes
         src = tensor2opencv(src, 1)
-        src = cv.adaptiveThreshold(src, max_value, self.adaptive_modes_map[adaptive_method], \
+        src = cv.adaptiveThreshold(src, max_value, self.adaptive_modes_map[adaptive_method],
                                    thresh_types_map[threshold_type], block_size + 1, c)
         src = cv.cvtColor(src, cv.COLOR_GRAY2RGB)
         src = opencv2tensor(src)
@@ -1085,7 +1087,7 @@ class AdaptiveThresholding:
 
 class EqualizeHistogram:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "src": ("IMAGE",),
@@ -1094,7 +1096,7 @@ class EqualizeHistogram:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "eq"
-    CATEGORY = "Bmad/CV/Thresholding"
+    CATEGORY = f"{cv_category_path}/Thresholding"
 
     def eq(self, src):
         src = tensor2opencv(src, 1)
@@ -1106,7 +1108,7 @@ class EqualizeHistogram:
 
 class CLAHE:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "src": ("IMAGE",),
@@ -1119,7 +1121,7 @@ class CLAHE:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "eq"
-    CATEGORY = "Bmad/CV/Thresholding"
+    CATEGORY = f"{cv_category_path}/Thresholding"
 
     def eq(self, src, clip_limit, tile_grid_x, tile_grid_y):
         src = tensor2opencv(src, 1)
@@ -1140,7 +1142,7 @@ class FindThreshold:
     """
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "src": ("IMAGE",),
@@ -1155,7 +1157,7 @@ class FindThreshold:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "search"
-    CATEGORY = "Bmad/CV/Thresholding"
+    CATEGORY = f"{cv_category_path}/Thresholding"
 
     def search(self, src, start_at, end_at, thresh_type, downscale_factor, condition):
         import cv2
@@ -1259,17 +1261,17 @@ class InRangeHSV:
     HUE_MODE_SPLIT = hue_modes[4]
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "rgb_image": ("IMAGE",),
             "color_a": ("HSV_COLOR",),
             "color_b": ("HSV_COLOR",),
-            "hue_mode": (s.hue_modes, {"default": s.hue_modes[0]})
+            "hue_mode": (cls.hue_modes, {"default": cls.hue_modes[0]})
         }}
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "thresh"
-    CATEGORY = "Bmad/CV/Thresholding"
+    CATEGORY = f"{cv_category_path}/Thresholding"
 
     def thresh(self, rgb_image, color_a, color_b, hue_mode):
         image = tensor2opencv(rgb_image, 3)
@@ -1296,18 +1298,18 @@ class DistanceTransform:
     mask_sizes = list(mask_sizes_map.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "binary_image": ("IMAGE",),
-                "distance_type": (s.distance_types, {"default": s.distance_types[0]}),
-                "mask_size": (s.mask_sizes, {"default": s.mask_sizes[0]}),
+                "distance_type": (cls.distance_types, {"default": cls.distance_types[0]}),
+                "mask_size": (cls.mask_sizes, {"default": cls.mask_sizes[0]}),
             }
         }
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "apply"
-    CATEGORY = "Bmad/CV/Thresholding"
+    CATEGORY = f"{cv_category_path}/Thresholding"
 
     def apply(self, binary_image, distance_type, mask_size):
         binary_image = tensor2opencv(binary_image, 1)
@@ -1350,12 +1352,12 @@ class MorphologicOperation:
     kernel_types = list(kernel_types_map.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "src": ("IMAGE",),
-                "operation": (s.operations, {"default": s.operations[0]}),
-                "kernel_type": (s.kernel_types, {"default": s.kernel_types[0]}),
+                "operation": (cls.operations, {"default": cls.operations[0]}),
+                "kernel_type": (cls.kernel_types, {"default": cls.kernel_types[0]}),
                 "kernel_size_x": ("INT", {"default": 4, "min": 2, "step": 2}),
                 "kernel_size_y": ("INT", {"default": 4, "min": 2, "step": 2}),
                 "iterations": ("INT", {"default": 1, "step": 1}),
@@ -1365,7 +1367,7 @@ class MorphologicOperation:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "apply"
-    CATEGORY = "Bmad/CV/Morphology"
+    CATEGORY = f"{cv_category_path}/Morphology"
 
     def apply(self, src, operation, kernel_type, kernel_size_x, kernel_size_y, iterations):
         img = tensor2opencv(src, 1)
@@ -1377,7 +1379,7 @@ class MorphologicOperation:
 
 class MorphologicSkeletoning:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "src": ("IMAGE",)
@@ -1386,7 +1388,7 @@ class MorphologicSkeletoning:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "compute"
-    CATEGORY = "Bmad/CV/Morphology"
+    CATEGORY = f"{cv_category_path}/Morphology"
 
     def compute(self, src):
         from skimage.morphology import skeletonize
@@ -1421,12 +1423,12 @@ class ColorDefaultDictionary:
     }
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"number_of_colors": ("INT", {"default": 8, "min": 2, "max": 12})}}
 
     RETURN_TYPES = ("COLOR_DICT",)
     FUNCTION = "ret"
-    CATEGORY = "Bmad/CV/Color A."
+    CATEGORY = f"{cv_category_path}/Color A."
 
     def ret(self, number_of_colors):
         dic = dict(list(self.default_color_dict.items())[0: number_of_colors])
@@ -1435,7 +1437,7 @@ class ColorDefaultDictionary:
 
 class ColorCustomDictionary:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "color_names": ("STRING", {"default": ""}),
             "colors": ("COLOR", {"default": ""})
@@ -1444,7 +1446,7 @@ class ColorCustomDictionary:
 
     RETURN_TYPES = ("COLOR_DICT",)
     FUNCTION = "ret"
-    CATEGORY = "Bmad/CV/Color A."
+    CATEGORY = f"{cv_category_path}/Color A."
     INPUT_IS_LIST = True
 
     def ret(self, color_names, colors):
@@ -1459,7 +1461,7 @@ class ColorCustomDictionary:
 
 class FindComplementaryColor:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "image": ("IMAGE",),
             "color_dict": ("COLOR_DICT",),
@@ -1473,7 +1475,7 @@ class FindComplementaryColor:
 
     RETURN_TYPES = ("COLOR", "STRING",)
     FUNCTION = "find_color"
-    CATEGORY = "Bmad/CV/Color A."
+    CATEGORY = f"{cv_category_path}/Color A."
 
     def find_color(self, image, color_dict, power, mask=None):
         image = tensor2opencv(image, 3)
@@ -1493,7 +1495,7 @@ class FindComplementaryColor:
 
 class SampleColorHSV:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         import sys
         return {"required": {
             "rgb_image": ("IMAGE",),
@@ -1503,15 +1505,15 @@ class SampleColorHSV:
 
     RETURN_TYPES = ("HSV_SAMPLES",)
     FUNCTION = "sample"
-    CATEGORY = "Bmad/CV/Color A."
+    CATEGORY = f"{cv_category_path}/Color A."
 
     def sample(self, rgb_image, sample_size, sampling_seed):
         image = tensor2opencv(rgb_image, 3)
         image_width = image.shape[1]
 
         # sample pixels
-        np.random.seed(sampling_seed)
-        random_indices = np.random.choice(image.shape[0] * image_width, sample_size, replace=False)
+        rng = np.random.default_rng(seed=sampling_seed)
+        random_indices = rng.choice(image.shape[0] * image_width, sample_size, replace=False)
         sample_pixels = np.array([image[i // image_width, i % image_width] for i in random_indices])
         sample_pixels = sample_pixels.reshape((1, -1, 3))
 
@@ -1523,14 +1525,14 @@ class SampleColorHSV:
 
 class ColorToHSVColor:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "rgb_color": ("COLOR",)
         }}
 
     RETURN_TYPES = ("HSV_COLOR",)
     FUNCTION = "convert"
-    CATEGORY = "Bmad/CV/Color A."
+    CATEGORY = f"{cv_category_path}/Color A."
 
     def convert(self, rgb_color):
         from colorsys import rgb_to_hsv
@@ -1544,7 +1546,7 @@ class ColorToHSVColor:
 
 class KMeansColor:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "image": ("IMAGE",),
             "number_of_colors": ("INT", {"default": 2, "min": 1}),
@@ -1554,7 +1556,7 @@ class KMeansColor:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "get_colors"
-    CATEGORY = "Bmad/CV/Color A."
+    CATEGORY = f"{cv_category_path}/Color A."
 
     def get_colors(self, image, number_of_colors, max_iterations, eps):
         image = tensor2opencv(image, 3)
@@ -1575,7 +1577,7 @@ class KMeansColor:
 
 class NaiveAutoKMeansColor:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "image": ("IMAGE",),
             "max_k": ("INT", {"default": 8, "min": 3, "max": 16}),
@@ -1590,7 +1592,7 @@ class NaiveAutoKMeansColor:
 
     RETURN_TYPES = ("IMAGE", "INT")
     FUNCTION = "get_colors"
-    CATEGORY = "Bmad/CV/Color A."
+    CATEGORY = f"{cv_category_path}/Color A."
 
     def get_colors(self, image, max_k, rc_threshold, max_iterations, eps):
         image = tensor2opencv(image, 3)
@@ -1695,16 +1697,16 @@ class BuildColorRangeHSV:
     interval_modes = list(interval_modes_map.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "samples": ("HSV_SAMPLES",),
             "percentage_modifier": ("INT", {"default": 50, "min": 1, "max": 100}),
-            "interval_type": (s.interval_modes, s.interval_modes[0]),
+            "interval_type": (cls.interval_modes, cls.interval_modes[0]),
         }}
 
     RETURN_TYPES = ("HSV_COLOR", "HSV_COLOR", InRangeHSV.hue_modes)
     FUNCTION = "get_interval"
-    CATEGORY = "Bmad/CV/Color A."
+    CATEGORY = f"{cv_category_path}/Color A."
 
     def get_interval(self, samples, percentage_modifier, interval_type):
         bounds = self.interval_modes_map[interval_type](samples, percentage_modifier)
@@ -1741,18 +1743,18 @@ class BuildColorRangeHSVAdvanced:
         self.samples = None
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             # "average": ("HSV_COLOR",), # compute from sample?
             "samples": ("HSV_SAMPLES",),
-            "hue_exp": ("STRING", {"multiline": True, "default": s.default_hue_expression}),
-            "sat_exp": ("STRING", {"multiline": True, "default": s.default_saturation_expression}),
-            "val_exp": ("STRING", {"multiline": True, "default": s.default_value_expression}),
+            "hue_exp": ("STRING", {"multiline": True, "default": cls.default_hue_expression}),
+            "sat_exp": ("STRING", {"multiline": True, "default": cls.default_saturation_expression}),
+            "val_exp": ("STRING", {"multiline": True, "default": cls.default_value_expression}),
         }}
 
     RETURN_TYPES = ("HSV_COLOR", "HSV_COLOR", InRangeHSV.hue_modes)
     FUNCTION = "get_interval"
-    CATEGORY = "Bmad/CV/Color A."
+    CATEGORY = f"{cv_category_path}/Color A."
 
     default_hue_expression = """# hue
 h_quant2(0, 1).scale_by_constant(16) if 2 < v_median < 253 else to_interval(0, 180)
@@ -1808,7 +1810,7 @@ v_quant2(0,1).interpolate(.5, [0, 255]).scale_by_constant(50) if 2 < v_median < 
 
 class Remap:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "remap": ("REMAP", {"forceInput": True}),
             "src": ("IMAGE",),
@@ -1822,7 +1824,7 @@ class Remap:
 
     RETURN_TYPES = ("IMAGE", "MASK",)
     FUNCTION = "transform"
-    CATEGORY = "Bmad/CV/Transform"
+    CATEGORY = f"{cv_category_path}/Transform"
 
     def transform(self, src, remap, interpolation, src_mask=None, output_with_alpha=False):
         src = tensor2opencv(src)
@@ -1864,7 +1866,7 @@ class Remap:
 class RemapBase(ABC):
     RETURN_TYPES = ("REMAP",)
     FUNCTION = "send_remap"
-    CATEGORY = "Bmad/CV/Transform"
+    CATEGORY = f"{cv_category_path}/Transform"
 
     @staticmethod
     def get_dims(mask):
@@ -1874,7 +1876,7 @@ class RemapBase(ABC):
 
 class InnerCylinderRemap(RemapBase):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "fov": ("INT", {"default": 90, "min": 1, "max": 179}),
             "swap_xy": ("BOOLEAN", {"default": False}),
@@ -1891,7 +1893,7 @@ class InnerCylinderRemap(RemapBase):
 
 class OuterCylinderRemap(RemapBase):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "fov": ("INT", {"default": 90, "min": 1, "max": 179}),
             "swap_xy": ("BOOLEAN", {"default": False}),
@@ -1917,7 +1919,7 @@ class RemapPinch(RemapBase):
     }
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return RemapPinch.INPUT_TYPES_DICT
 
     def send_remap(self, power_x, power_y, center_x, center_y):
@@ -1930,7 +1932,7 @@ class RemapPinch(RemapBase):
 
 class RemapStretch(RemapBase):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return RemapPinch.INPUT_TYPES_DICT
 
     def send_remap(self, power_x, power_y, center_x, center_y):
@@ -1958,7 +1960,7 @@ class RemapBarrelDistortion(RemapBase):
         }
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return RemapBarrelDistortion.BARREL_DIST_TYPES()
         # inputs = RemapBarrelDistortion.BARREL_DIST_F_TYPES()
         # inputs["required"]["use_inverse_variant"] = ("BOOLEAN", {"default": True})
@@ -1974,7 +1976,7 @@ class RemapBarrelDistortion(RemapBase):
 
 class RemapReverseBarrelDistortion(RemapBase):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return RemapBarrelDistortion.BARREL_DIST_TYPES()
 
     def send_remap(self, a, b, c, use_inverse_variant, d=None):
@@ -1987,7 +1989,7 @@ class RemapReverseBarrelDistortion(RemapBase):
 
 class RemapInsideParabolas(RemapBase):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "dst_mask_with_2_parabolas": ("MASK",),
         }
@@ -2004,7 +2006,7 @@ class RemapInsideParabolas(RemapBase):
 
 class RemapInsideParabolasAdvanced(RemapBase):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "dst_mask_with_2_parabolas": ("MASK",),
             "curve_wise_adjust": ("FLOAT", {"default": 1, "min": .3, "max": 2, "step": .01}),
@@ -2025,7 +2027,7 @@ class RemapInsideParabolasAdvanced(RemapBase):
 
 class RemapFromInsideParabolas(RemapBase):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "src_mask_with_2_parabolas": ("MASK",),
             "width": ("INT", {"default": 512, "min": 16, "max": 4096}),
@@ -2048,10 +2050,10 @@ class RemapQuadrilateral(RemapBase):
     modes_list = list(quad_remap_methods_map.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "dst_mask_with_4_points": ("MASK",),
-            "mode": (s.modes_list, {"default": s.modes_list[0]}),
+            "mode": (cls.modes_list, {"default": cls.modes_list[0]}),
         }
         }
 
@@ -2080,7 +2082,7 @@ class RemapQuadrilateral(RemapBase):
 
 class RemapFromQuadrilateral(RemapBase):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "src_mask_with_4_points": ("MASK",),
             # "mode": (s.modes_list, {"default": s.modes_list[0]}),
@@ -2115,9 +2117,9 @@ class RemapWarpPolar(RemapBase):
     MAX_RADIUS_KEYS = list(MAX_RADIUS.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
-            "max_radius": (s.MAX_RADIUS_KEYS, {"default": s.MAX_RADIUS_KEYS[0]}),
+            "max_radius": (cls.MAX_RADIUS_KEYS, {"default": cls.MAX_RADIUS_KEYS[0]}),
             "radius_adjust": ("FLOAT", {"default": 1, "min": .1, "max": 2048, "step": 0.01}),
             "center_x_adjust": ("FLOAT", {"default": 0, "min": -3, "max": 3, "step": 0.01}),
             "center_y_adjust": ("FLOAT", {"default": 0, "min": -3, "max": 3, "step": 0.01}),
@@ -2168,7 +2170,7 @@ class RemapWarpPolar(RemapBase):
 
 class MaskOuterBlur:  # great, another "funny" name; what would you call this?
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "src": ("IMAGE",),
@@ -2180,7 +2182,7 @@ class MaskOuterBlur:  # great, another "funny" name; what would you call this?
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "compute"
-    CATEGORY = "Bmad/CV/Misc"
+    CATEGORY = f"{cv_category_path}/Misc"
 
     def compute(self, src, mask, kernel_size, paste_src):
         from comfy.model_management import is_nvidia
@@ -2226,12 +2228,12 @@ class MaskOuterBlur:  # great, another "funny" name; what would you call this?
             # setup grid/block sizes
             gpu = get_current_device()
             w, h = mask.shape[1], mask.shape[0]
-            blockDimx, blockDimy = np.floor(np.array([w / h, h / w]) * gpu.MAX_THREADS_PER_BLOCK ** (1 / 2)).astype(
-                np.int32)
-            gridx, gridy = np.ceil(np.array([w / blockDimx, h / blockDimy])).astype(np.int32)
+            block_dim_x, block_dim_y = np.floor(
+                np.array([w / h, h / w]) * gpu.MAX_THREADS_PER_BLOCK ** (1 / 2)).astype(np.int32)
+            gridx, gridy = np.ceil(np.array([w / block_dim_x, h / block_dim_y])).astype(np.int32)
 
             # run on gpu, and then fetch result as numpy array
-            blur_cuda((gridx, gridy), (blockDimx, blockDimy),
+            blur_cuda((gridx, gridy), (block_dim_x, block_dim_y),
                       (image_cupy, mask_cupy, out, kernel_gpu, kernel_size, mask_extended.shape[1],
                        mask_extended.shape[0]))
             result_float32 = cp.asnumpy(out)
@@ -2250,7 +2252,6 @@ class MaskOuterBlur:  # great, another "funny" name; what would you call this?
 
         result = opencv2tensor(result_float32)
         return (result,)
-
 
 # endregion
 
@@ -2313,5 +2314,5 @@ NODE_CLASS_MAPPINGS = {
     "RemapFromQuadrilateral (homography)": RemapFromQuadrilateral,
     "RemapWarpPolar": RemapWarpPolar,
 
-    "MaskOuterBlur": MaskOuterBlur
+    "MaskOuterBlur": MaskOuterBlur,
 }

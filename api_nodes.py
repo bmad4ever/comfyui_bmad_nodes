@@ -9,13 +9,13 @@ import json
 import copy
 import os
 import folder_paths
-import comfy.sd
 import nodes
 import comfy_extras.nodes_hypernetwork as hyper
+from .utils.dry import base_category_path
 
+api_category_path = f"{base_category_path}/api"
 
 # region : api core nodes
-
 
 
 class CreateRequestMetadata:
@@ -32,7 +32,7 @@ class CreateRequestMetadata:
         self.type = "output"
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "request_id": ("STRING", {"default": "insert_id"})
         },
@@ -40,16 +40,16 @@ class CreateRequestMetadata:
 
     RETURN_TYPES = ()
     FUNCTION = "update_outdata"
-    CATEGORY = "Bmad/api"
+    CATEGORY = api_category_path
     OUTPUT_NODE = True
 
     @staticmethod
     def get_and_validate_requestID():
-        if CreateRequestMetadata.request_id == None:
-            raise ("Request ID was not set. CreateRequestMetadata node might be missing.")
+        if CreateRequestMetadata.request_id is None:
+            raise TypeError("Request ID was not set. CreateRequestMetadata node might be missing.")
         if CreateRequestMetadata.request_id == "":
-            raise (
-                "Request ID was set to empty. Check if it is being properly set to avoid conflicts with subsequent requests.")
+            raise ValueError("Request ID was set to empty."
+                             " Check if it is being properly set to avoid conflicts with subsequent requests.")
         return CreateRequestMetadata.request_id
 
     @staticmethod
@@ -151,12 +151,13 @@ class CreateRequestMetadata:
 
     def update_outdata(self, request_id):
         if request_id == "insert_id":
-            raise (
-                "Request ID in CreateRequestMetadata node with value: 'insert_id'. You might not be setting it properly or might have more than one CreateRequestMetadata node in your workflow/node.")
+            raise ValueError("Request ID in CreateRequestMetadata node with value: "
+                             "'insert_id'. You might not be setting it properly or "
+                             "might have more than one CreateRequestMetadata node in your workflow/node.")
 
-        if CreateRequestMetadata.request_id == request_id:
-            raise (
-                "Request ID is equal to previously set ID. You may have more than one CreateRequestMetadata node in your workflow/prompt.")
+        assert CreateRequestMetadata.request_id != request_id, (
+            "Request ID is equal to previously set ID. "
+            "You may have more than one CreateRequestMetadata node in your workflow/prompt.")
 
         # no problems found, set the request id
         CreateRequestMetadata.request_id = request_id
@@ -183,7 +184,7 @@ class SetRequestStateToComplete:
         self.type = "output"
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "resource_0": ("TASK_DONE",)
         },
@@ -191,7 +192,7 @@ class SetRequestStateToComplete:
 
     RETURN_TYPES = ()
     FUNCTION = "update_outdata"
-    CATEGORY = "Bmad/api"
+    CATEGORY = api_category_path
     OUTPUT_NODE = True
 
     def update_outdata(self, **kwargs):
@@ -220,7 +221,7 @@ class SaveImage2:
         self.type = "output"
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required":
                     {"images": ("IMAGE",),
                      "resource_name": ("STRING", {"default": "image"})},
@@ -230,7 +231,7 @@ class SaveImage2:
     RETURN_TYPES = ("TASK_DONE",)
     FUNCTION = "save_images"
 
-    CATEGORY = "Bmad/api"
+    CATEGORY = api_category_path
 
     def save_images(self, images, resource_name="image", prompt=None, extra_pnginfo=None):
         def build_hashcode(data):
@@ -299,7 +300,7 @@ class SaveImage2:
 
 class LoadImage64:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required":
             {
                 "image_code": ("STRING", {"default": "insert encoded image here"})
@@ -308,7 +309,7 @@ class LoadImage64:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "get_image"
-    CATEGORY = "Bmad/api"
+    CATEGORY = api_category_path
 
     def get_image(self, image_code):
         image = Image.open(BytesIO(base64.b64decode(image_code)))
@@ -321,7 +322,7 @@ class LoadImage64:
 class RequestInputs:
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "values": ("STRING", {"default": ""}),
         },
@@ -329,7 +330,7 @@ class RequestInputs:
 
     RETURN_TYPES = tuple(["STRING" for x in range(32)])
     FUNCTION = "start"
-    CATEGORY = "Bmad/api"
+    CATEGORY = api_category_path
 
     def start(self, values):
         values = tuple(json.loads(values).values())
@@ -348,7 +349,7 @@ class String2Int:
     """
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"inStr": ("STRING", {"default": ""})}, }
 
     RETURN_TYPES = ("INT",)
@@ -362,7 +363,7 @@ class String2Int:
 class String2Float:
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"inStr": ("STRING", {"default": ""})}, }
 
     RETURN_TYPES = ("FLOAT",)
@@ -383,7 +384,7 @@ class InputString2IntArray:
     """
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"inStr": ("STRING", {"default": ""})}, }
 
     RETURN_TYPES = ("INT_ARRAY",)
@@ -393,11 +394,10 @@ class InputString2IntArray:
     def convert(self, inStr):
         # not really a str, suppose is a list read from the input json
         if isinstance(inStr, list):
-            return (inStr, )
+            return (inStr,)
 
         # otherwise suppose it is a valid string
         return ([int(x) for x in inStr.split(',')],)
-
 
 
 # endregion : input converters
@@ -421,7 +421,7 @@ class DirtyLoaderUtils:
 
 class DirtyCheckpointLoader:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "config_name": ("STRING", {"default": ""}),
             "ckpt_name": ("STRING", {"default": ""})
@@ -445,7 +445,7 @@ class DirtyCheckpointLoader:
 
 class DirtyCheckpointLoaderSimple:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"ckpt_name": ("STRING", {"default": ""})}}
 
     RETURN_TYPES = ("MODEL", "CLIP", "VAE")
@@ -463,7 +463,7 @@ class DirtyCheckpointLoaderSimple:
 
 class DirtyLoraLoader:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"model": ("MODEL",),
                              "clip": ("CLIP",),
                              "lora_name": ("STRING", {"default": ""}),
@@ -486,7 +486,7 @@ class DirtyLoraLoader:
 
 class DirtyHypernetworkLoader:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"model": ("MODEL",),
                              "hypernetwork_name": ("STRING", {"default": ""}),
                              "strength": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
@@ -532,15 +532,15 @@ class GetModels:
         self.type = "output"
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
-            "dump": (s.dump_option, {"default": "all models"})
+            "dump": (cls.dump_option, {"default": "all models"})
         }
         }
 
     RETURN_TYPES = ()
     FUNCTION = "dump_it"
-    CATEGORY = "Bmad/dump"
+    CATEGORY = f"{base_category_path}/dump"
     OUTPUT_NODE = True
 
     def dump_it(self, dump):
@@ -568,16 +568,16 @@ class GetPrompt:
         self.type = "output"
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
-            "api_prompt": (s.prompt_mode, {"default": "print to console"})
+            "api_prompt": (cls.prompt_mode, {"default": cls.prompt_mode[0]})
         },
             "hidden": {"prompt": "PROMPT", "unique_id": "UNIQUE_ID"},
         }
 
     RETURN_TYPES = ()
     FUNCTION = "getPrompt"
-    CATEGORY = "Bmad/dump"
+    CATEGORY = f"{base_category_path}/dump"
     OUTPUT_NODE = True
 
     def getPrompt(self, api_prompt, prompt, unique_id):
@@ -614,6 +614,7 @@ class GetPrompt:
             pass
 
         return ()
+
 
 # endregion : dumpers
 

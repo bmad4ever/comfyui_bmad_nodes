@@ -1,18 +1,26 @@
+import numpy as np
 import math
-
 import nodes
-from .utils.dry import *
+import torch
+from .utils.dry import (base_category_path, images_category_path, conditioning_category_path,
+                        opencv2tensor, tensor2opencv, image_output_formats_options, image_output_formats_options_map,
+                        grid_len_INPUT, maybe_convert_img, rect_modes, rect_modes_map,
+                        prepare_text_for_eval, get_arg_name_from_multiple_inputs, print_yellow)
 from .utils.color import ColorClip, color255_INPUT
+
+
+lists_category_path = f"{base_category_path}/Lists"
+latent_category_path = f"{base_category_path}/latent"
 
 
 class StringNode:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"inStr": ("STRING", {"default": ""})}, }
 
     RETURN_TYPES = ("STRING",)
     FUNCTION = "pass_it"
-    CATEGORY = "Bmad"
+    CATEGORY = base_category_path
 
     def pass_it(self, inStr):
         return (inStr,)
@@ -20,7 +28,7 @@ class StringNode:
 
 class ColorClipSimple(ColorClip):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return super().get_types(advanced=False)
 
     def color_clip(self, image, color, target, complement):
@@ -30,7 +38,7 @@ class ColorClipSimple(ColorClip):
 
 class ColorClipAdvanced(ColorClip):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return super().get_types(advanced=True)
 
     def color_clip(self, image, color, target, complement, color_a=None, color_b=None):
@@ -42,12 +50,12 @@ class MonoMerge:
     target = ["white", "black"]
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image1": ("IMAGE",),
                 "image2": ("IMAGE",),
-                "target": (s.target, {"default": "white"}),
+                "target": (cls.target, {"default": "white"}),
                 "output_format": (image_output_formats_options, {
                     "default": image_output_formats_options[0]
                 })
@@ -57,7 +65,7 @@ class MonoMerge:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "monochromatic_merge"
-    CATEGORY = "Bmad/image"
+    CATEGORY = images_category_path
 
     def monochromatic_merge(self, image1, image2, target, output_format):
         image1 = tensor2opencv(image1, 1)
@@ -84,7 +92,7 @@ class RepeatIntoGridLatent:
         pass
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"samples": ("LATENT",),
                              "columns": grid_len_INPUT,
                              "rows": grid_len_INPUT,
@@ -92,7 +100,7 @@ class RepeatIntoGridLatent:
 
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "repeat_into_grid"
-    CATEGORY = "Bmad/latent"
+    CATEGORY = latent_category_path
 
     def repeat_into_grid(self, samples, columns, rows):
         s = samples.copy()
@@ -111,7 +119,7 @@ class RepeatIntoGridImage:
         pass
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"image": ("IMAGE",),
                              "columns": grid_len_INPUT,
                              "rows": grid_len_INPUT,
@@ -119,7 +127,7 @@ class RepeatIntoGridImage:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "repeat_into_grid"
-    CATEGORY = "Bmad/image"
+    CATEGORY = images_category_path
 
     def repeat_into_grid(self, image, columns, rows):
         samples = image.movedim(-1, 1)
@@ -130,7 +138,7 @@ class RepeatIntoGridImage:
 
 class UnGridImage:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"image": ("IMAGE",),
                              "columns": grid_len_INPUT,
                              "rows": grid_len_INPUT,
@@ -138,7 +146,7 @@ class UnGridImage:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "ungridify"
-    CATEGORY = "Bmad/image"
+    CATEGORY = images_category_path
     OUTPUT_IS_LIST = (True,)
 
     def ungridify(self, image, columns, rows):
@@ -186,7 +194,7 @@ class ConditioningGridCond:
         pass
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "columns": grid_len_INPUT,
             "rows": grid_len_INPUT,
@@ -198,7 +206,7 @@ class ConditioningGridCond:
 
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "set_conditioning"
-    CATEGORY = "Bmad/conditioning"
+    CATEGORY = conditioning_category_path
 
     def set_conditioning(self, base, columns, rows, width, height, strength, **kwargs):
         cond = base
@@ -226,7 +234,7 @@ class ConditioningGridStr:
         pass
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "clip": ("CLIP",),
             "base": ("STRING", {"default": '', "multiline": False}),
@@ -239,7 +247,7 @@ class ConditioningGridStr:
 
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "set_conditioning"
-    CATEGORY = "Bmad/conditioning"
+    CATEGORY = conditioning_category_path
 
     def set_conditioning(self, clip, base, columns, rows, width, height, strength, **kwargs):
         text_encode_node = nodes.CLIPTextEncode()
@@ -269,14 +277,14 @@ class CombineMultipleConditioning:
         pass
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "combine": ("INT", {"default": 3, "min": 2, "max": 50, "step": 1}),
         }}
 
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "combine_conds"
-    CATEGORY = "Bmad/conditioning"
+    CATEGORY = conditioning_category_path
 
     def combine_conds(self, combine, **kwargs):
         cond_combine_node = nodes.ConditioningCombine()
@@ -303,7 +311,7 @@ class CombineMultipleSelectiveConditioning:
         pass
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "to_use": ("INT_ARRAY",),
             "combine": ("INT", {"default": 2, "min": 2, "max": 50, "step": 1}),
@@ -311,7 +319,7 @@ class CombineMultipleSelectiveConditioning:
 
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "combine_conds"
-    CATEGORY = "Bmad/conditioning"
+    CATEGORY = conditioning_category_path
 
     def combine_conds(self, to_use, **kwargs):
         cond_combine_node = nodes.ConditioningCombine()
@@ -339,16 +347,16 @@ class AddString2Many:
         pass
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "to_add": ("STRING", {"default": '', "multiline": False}),
             "inputs_len": ("INT", {"default": 3, "min": 2, "max": 32, "step": 1}),
-            "operation": (s.OPERATION, {"default": 'append'}),
+            "operation": (cls.OPERATION, {"default": 'append'}),
         }}
 
     RETURN_TYPES = tuple(["STRING" for x in range(32)])
     FUNCTION = "add_str"
-    CATEGORY = "Bmad/conditioning"
+    CATEGORY = conditioning_category_path
 
     def add_str(self, to_add, inputs_len, operation, **kwargs):
         new_strs = []
@@ -374,7 +382,7 @@ class AdjustRect:
     round_modes = list(round_mode_map.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "a": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
             "b": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
@@ -382,14 +390,14 @@ class AdjustRect:
             "d": ("INT", {"min": 0, "max": np.iinfo(np.int32).max, "step": 1}),
             "xm": ("INT", {"default": 64, "min": 2, "max": 1280, "step": 2}),
             "ym": ("INT", {"default": 64, "min": 2, "max": 1280, "step": 2}),
-            "round_mode": (s.round_modes, {"default": s.round_modes[2]}),
+            "round_mode": (cls.round_modes, {"default": cls.round_modes[2]}),
             "input_format": (rect_modes, {"default": rect_modes[1]}),
             "output_format": (rect_modes, {"default": rect_modes[1]}),
         }}
 
     RETURN_TYPES = tuple(["INT" for x in range(4)])
     FUNCTION = "adjust"
-    CATEGORY = "Bmad"
+    CATEGORY = base_category_path
 
     def adjust(self, a, b, c, d, xm, ym, round_mode, input_format, output_format):
         x1, y1, x2, y2 = rect_modes_map[input_format]["toBounds"](a, b, c, d)
@@ -425,7 +433,7 @@ class VAEEncodeBatch:
         pass
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "inputs_len": ("INT", {"default": 3, "min": 2, "max": 32, "step": 1}),
             "vae": ("VAE",)
@@ -433,7 +441,7 @@ class VAEEncodeBatch:
 
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "encode"
-    CATEGORY = "Bmad"
+    CATEGORY = base_category_path
 
     def encode(self, inputs_len, vae, **kwargs):
         vae_encoder = nodes.VAEEncode()
@@ -455,14 +463,14 @@ class AnyToAny:
         pass
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "v": ("*",),
             "function": ("STRING", {"multiline": True, "default": ""}),
         }}
 
     FUNCTION = "eval_it"
-    CATEGORY = "Bmad/⚠️⚠️⚠️"
+    CATEGORY = f"{base_category_path}/⚠️⚠️⚠️"
     RETURN_TYPES = tuple(["*" for x in range(16)])
 
     def eval_it(self, v, function):
@@ -483,17 +491,17 @@ class MaskGridNKSamplersAdvanced(nodes.KSamplerAdvanced):
     fork_options = list(fork_before_sampling.keys())
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         types = super().INPUT_TYPES()
         types["required"]["mask"] = ("IMAGE",)
         types["required"]["rows"] = ("INT", {"default": 1, "min": 1, "max": 16})
         types["required"]["columns"] = ("INT", {"default": 3, "min": 1, "max": 16})
-        types["required"]["mode"] = (s.fork_options, {"default": s.fork_options[0]})
+        types["required"]["mode"] = (cls.fork_options, {"default": cls.fork_options[0]})
         return types
 
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "gen_batch"
-    CATEGORY = "Bmad/experimental"
+    CATEGORY = f"{base_category_path}/experimental"
 
     def gen_batch(self, model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative,
                   latent_image, start_at_step, end_at_step, return_with_leftover_noise,
@@ -563,7 +571,7 @@ class MaskGridNKSamplersAdvanced(nodes.KSamplerAdvanced):
 
 class MergeLatentsBatchGridwise:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "batch": ("LATENT",),
             "mask": ("IMAGE",),  # only to fetch the sizes, not really needed.
@@ -573,7 +581,7 @@ class MergeLatentsBatchGridwise:
 
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "merge"
-    CATEGORY = "Bmad/latent"
+    CATEGORY = latent_category_path
 
     def merge(self, batch, mask, rows, columns):
         _, mask_height, mask_width, _ = mask.size()
@@ -599,7 +607,7 @@ class MergeLatentsBatchGridwise:
 
 class CLIPEncodeMultiple(nodes.CLIPTextEncode):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {
             "clip": ("CLIP",),
             "inputs_len": ("INT", {"default": 9, "min": 0, "max": 32}),
@@ -607,7 +615,7 @@ class CLIPEncodeMultiple(nodes.CLIPTextEncode):
 
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "gen2"
-    CATEGORY = "Bmad/conditioning"
+    CATEGORY = conditioning_category_path
     OUTPUT_IS_LIST = (True,)
 
     def gen2(self, clip, inputs_len, **kwargs):
@@ -620,7 +628,7 @@ class CLIPEncodeMultiple(nodes.CLIPTextEncode):
 
 class ControlNetHadamard(nodes.ControlNetApply):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"conds": ("CONDITIONING",),
                              "control_net": ("CONTROL_NET",),
                              "image": ("IMAGE",),
@@ -629,7 +637,7 @@ class ControlNetHadamard(nodes.ControlNetApply):
 
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "apply"
-    CATEGORY = "Bmad/conditioning"
+    CATEGORY = conditioning_category_path
     INPUT_IS_LIST = True
     OUTPUT_IS_LIST = (True,)
 
@@ -637,8 +645,7 @@ class ControlNetHadamard(nodes.ControlNetApply):
         control_net = control_net[0]
         strength = strength[0]
 
-        if len(images) != len(conds):
-            raise "lists sizes do not match"  # maybe relax check and allow for fewer conds than images?
+        assert len(images) == len(conds), "lists sizes do not match"
 
         print(len(images))
         print(len(images[0]))
@@ -651,7 +658,7 @@ class ControlNetHadamard(nodes.ControlNetApply):
 
 class ControlNetHadamardManual(ControlNetHadamard):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"conds": ("CONDITIONING",),
                              "control_net": ("CONTROL_NET",),
                              "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
@@ -660,7 +667,7 @@ class ControlNetHadamardManual(ControlNetHadamard):
 
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "apply"
-    CATEGORY = "Bmad/conditioning"
+    CATEGORY = conditioning_category_path
     INPUT_IS_LIST = True
     OUTPUT_IS_LIST = (True,)
 
@@ -678,12 +685,12 @@ class ControlNetHadamardManual(ControlNetHadamard):
 
 class FlatLatentsIntoSingleGrid:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"latents": ("LATENT",), }}
 
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "flat_into_grid"
-    CATEGORY = "Bmad/latent"
+    CATEGORY = latent_category_path
 
     def flat_into_grid(self, latents):
         n, lc, lh, lw = latents['samples'].size()
@@ -707,12 +714,12 @@ class FlatLatentsIntoSingleGrid:
 
 class ColorRGB:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"r": color255_INPUT, "g": color255_INPUT, "b": color255_INPUT}}
 
     RETURN_TYPES = ("COLOR",)
     FUNCTION = "ret"
-    CATEGORY = "Bmad/image"
+    CATEGORY = images_category_path
 
     def ret(self, r, g, b):
         return ([r, g, b],)
@@ -720,12 +727,12 @@ class ColorRGB:
 
 class ColorRGBFromHex:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"hex": ("STRING", {"default": "#000000"})}}
 
     RETURN_TYPES = ("COLOR",)
     FUNCTION = "ret"
-    CATEGORY = "Bmad/image"
+    CATEGORY = images_category_path
 
     def ret(self, hex):
         import re
@@ -737,12 +744,12 @@ class ColorRGBFromHex:
 
 class ImageBatchToList:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {"required": {"images": ("IMAGE",)}}
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "to_list"
-    CATEGORY = "Bmad/image"
+    CATEGORY = images_category_path
     OUTPUT_IS_LIST = (True,)
 
     def to_list(self, images):
@@ -758,7 +765,7 @@ class UnMakeListMeta(type):
             attrs['RETURN_TYPES'] = tuple([attrs["TYPE"].upper() for _ in range(32)])
 
         if 'CATEGORY' not in attrs:
-            attrs['CATEGORY'] = 'Bmad/Lists/GetAll'
+            attrs['CATEGORY'] = f'{lists_category_path}/GetAll'
 
         attrs['FUNCTION'] = 'get_all'
         attrs['INPUT_IS_LIST'] = True
@@ -792,7 +799,7 @@ class GetSingleFromListMeta(type):
             attrs['RETURN_TYPES'] = (attrs["TYPE"].upper(),)
 
         if 'CATEGORY' not in attrs:
-            attrs['CATEGORY'] = 'Bmad/Lists/Get1'
+            attrs['CATEGORY'] = f'{lists_category_path}/Get1'
 
         attrs['FUNCTION'] = 'get_one'
         attrs['INPUT_IS_LIST'] = True
@@ -854,7 +861,7 @@ class MakeListMeta(type):
             attrs['RETURN_TYPES'] = (attrs["TYPE"].upper(),)
 
         if 'CATEGORY' not in attrs:
-            attrs['CATEGORY'] = 'Bmad/Lists/Make or Intercalate'
+            attrs['CATEGORY'] = f'{lists_category_path}/Make or Intercalate'
 
         attrs['FUNCTION'] = 'to_list'
         attrs['OUTPUT_IS_LIST'] = (True,)
@@ -889,7 +896,7 @@ class ExtendListMeta(MakeListMeta):
 
         attrs['INPUT_IS_LIST'] = True
         attrs['to_list'] = to_list
-        attrs['CATEGORY'] = 'Bmad/Lists/Extend'
+        attrs['CATEGORY'] = f'{lists_category_path}/Extend'
 
         return super().__new__(cls, name, bases, attrs)
 

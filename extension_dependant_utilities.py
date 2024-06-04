@@ -1,5 +1,5 @@
 from .utils.dry import *
-from .simple_utilities import ConditioningGridCond
+from .simple_utilities import ConditioningGridCond, conditioning_category_path
 from custom_nodes.ComfyUI_ADV_CLIP_emb.nodes import AdvancedCLIPTextEncode
 
 
@@ -29,21 +29,22 @@ class ConditioningGridStr_ADVEncode:
 
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "set_conditioning"
-    CATEGORY = "Bmad/conditioning"
+    CATEGORY = conditioning_category_path
 
-#def encode(self, clip: comfy.sd.CLIP, text: str, parser: str, mean_normalization: bool, multi_conditioning: bool, use_old_emphasis_implementation: bool, use_CFGDenoiser:bool,with_SDXL=False,text_g="",text_l=""):
+    #def encode(self, clip: comfy.sd.CLIP, text: str, parser: str, mean_normalization: bool, multi_conditioning: bool, use_old_emphasis_implementation: bool, use_CFGDenoiser:bool,with_SDXL=False,text_g="",text_l=""):
     def set_conditioning(self, clip, base, columns, rows, width, height, strength,
                          token_normalization, weight_interpretation,
                          **kwargs):
         text_encode_node = AdvancedCLIPTextEncode()
         cond_grid_node = ConditioningGridCond()
 
-        encoded_base = text_encode_node.encode(clip, base, token_normalization, weight_interpretation,'disable')[0]
+        encoded_base = text_encode_node.encode(clip, base, token_normalization, weight_interpretation, 'disable')[0]
         encoded_grid = {}
         for r in range(rows):
             for c in range(columns):
                 cell = f"r{r + 1}_c{c + 1}"
-                encoded_grid[cell] = text_encode_node.encode(clip, kwargs[cell], token_normalization, weight_interpretation,'disable')[0]
+                encoded_grid[cell] = \
+                text_encode_node.encode(clip, kwargs[cell], token_normalization, weight_interpretation, 'disable')[0]
 
         return cond_grid_node.set_conditioning(encoded_base, columns, rows, width, height, strength, **encoded_grid)
 
@@ -58,14 +59,15 @@ class CLIPEncodeMultipleAdvanced(AdvancedCLIPTextEncode):
 
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "gen2"
-    CATEGORY = "Bmad/conditioning"
+    CATEGORY = conditioning_category_path
     OUTPUT_IS_LIST = (True,)
 
     def gen2(self, clip, token_normalization, weight_interpretation, inputs_len, **kwargs):
         conds = []
         for i in range(inputs_len):
             arg_name = get_arg_name_from_multiple_inputs("string", i)
-            conds.append(super().encode(clip, kwargs[arg_name], token_normalization, weight_interpretation,'disable')[0])
+            conds.append(
+                super().encode(clip, kwargs[arg_name], token_normalization, weight_interpretation, 'disable')[0])
         return (conds,)
 
 

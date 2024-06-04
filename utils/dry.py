@@ -1,8 +1,11 @@
 # D.R.Y ( Don't Repeat Yourself: cross file utilities )
 from typing import Callable
-
 import torch
 import numpy as np
+
+base_category_path = "Bmad"
+images_category_path = f"{base_category_path}/image"
+conditioning_category_path = f"{base_category_path}/conditioning"
 
 
 grid_len_INPUT = ("INT", {
@@ -12,7 +15,6 @@ grid_len_INPUT = ("INT", {
     "step": 1
 })
 
-
 image_output_formats_options_map = {
     "RGB": 3,
     "GRAY": 1
@@ -20,7 +22,7 @@ image_output_formats_options_map = {
 image_output_formats_options = list(image_output_formats_options_map.keys())
 
 
-def tensor2opencv(image_tensor, out_format_number_of_channels=3):
+def tensor2opencv(image_tensor, out_format_number_of_channels=3) -> np.ndarray:
     """
     Args:
         image_tensor: tensor containing the image data.
