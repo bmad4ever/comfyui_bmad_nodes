@@ -354,7 +354,7 @@ class String2Int:
 
     RETURN_TYPES = ("INT",)
     FUNCTION = "convert"
-    CATEGORY = "Bmad/api/parseInput"
+    CATEGORY = f"{api_category_path}/parseInput"
 
     def convert(self, inStr):
         return (int(inStr),)
@@ -368,7 +368,7 @@ class String2Float:
 
     RETURN_TYPES = ("FLOAT",)
     FUNCTION = "convert"
-    CATEGORY = "Bmad/api/parseInput"
+    CATEGORY = f"{api_category_path}/parseInput"
 
     def convert(self, inStr):
         return (float(inStr),)
@@ -389,7 +389,7 @@ class InputString2IntArray:
 
     RETURN_TYPES = ("INT_ARRAY",)
     FUNCTION = "convert"
-    CATEGORY = "Bmad/api/parseInput"
+    CATEGORY = f"{api_category_path}/parseInput"
 
     def convert(self, inStr):
         # not really a str, suppose is a list read from the input json
@@ -430,7 +430,7 @@ class DirtyCheckpointLoader:
     RETURN_TYPES = ("MODEL", "CLIP", "VAE")
     FUNCTION = "load_checkpoint"
 
-    CATEGORY = "Bmad/api/dirty loaders"
+    CATEGORY = f"{api_category_path}/dirty loaders"
 
     def load_checkpoint(self, config_name, ckpt_name, output_vae=True, output_clip=True):
         ckpt_name = DirtyLoaderUtils.find_matching_filename(
@@ -451,7 +451,7 @@ class DirtyCheckpointLoaderSimple:
     RETURN_TYPES = ("MODEL", "CLIP", "VAE")
     FUNCTION = "load_checkpoint"
 
-    CATEGORY = "Bmad/api/dirty loaders"
+    CATEGORY = f"{api_category_path}/dirty loaders"
 
     def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True):
         ckpt_name = DirtyLoaderUtils.find_matching_filename(
@@ -474,7 +474,7 @@ class DirtyLoraLoader:
     RETURN_TYPES = ("MODEL", "CLIP")
     FUNCTION = "load_lora"
 
-    CATEGORY = "Bmad/api/dirty loaders"
+    CATEGORY = f"{api_category_path}/dirty loaders"
 
     def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
         lora_name = DirtyLoaderUtils.find_matching_filename(
@@ -495,7 +495,7 @@ class DirtyHypernetworkLoader:
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "load_hypernetwork"
 
-    CATEGORY = "Bmad/api/dirty loaders"
+    CATEGORY = f"{api_category_path}/dirty loaders"
 
     def load_hypernetwork(self, model, hypernetwork_name, strength):
         hypernetwork_name = DirtyLoaderUtils.find_matching_filename(
@@ -610,8 +610,6 @@ class GetPrompt:
             file = os.path.join(self.output_dir, file)
             with open(file, 'w') as f:
                 json.dump(prompt, f, indent=1)
-        else:
-            pass
 
         return ()
 
