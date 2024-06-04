@@ -1,6 +1,6 @@
 import { app } from "../../scripts/app.js";
 
-var mi_node_types = {
+const mi_node_types = {
     "VAEEncodeBatch": "IMAGE",
     "CondList (string) Advanced": "CONDITIONING",
     "CLIPEncodeMultipleAdvanced": "STRING",
