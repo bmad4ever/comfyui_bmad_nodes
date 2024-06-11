@@ -18,7 +18,8 @@ class ColorClipADE20K(ColorClip):
 
     def color_clip(self, image, class_name, target, complement):
         clip_color = list((ADE20K_dic[class_name] * 255).astype(uint8))
-        image = self.clip(image, clip_color, target, complement)
+        # note: max eucl. dist. between 2 colors in the dictionary is 7.xxx ... w/ a diff of (4, 5, 3)
+        image = self.clip(image, clip_color, target, complement, leeway=2)
         return (image,)
 
 

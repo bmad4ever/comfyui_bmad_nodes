@@ -49,7 +49,11 @@ class ColorClip:
 
         return types
 
-    def clip(self, image, color, target, complement, color_a=None, color_b=None):
+    def clip(self, image, color, target, complement, color_a=None, color_b=None, leeway: int = 0):
+        """
+        @param leeway: per channel, difference threshold
+        @return:
+        """
 
         color = setup_color_to_correct_type(color)
         color_a = setup_color_to_correct_type(color_a)
@@ -85,7 +89,13 @@ class ColorClip:
             case _:
                 new_image = np.full_like(image, target_color)
 
-        complement_indexes = np.any(image != color, axis=-1)
+        if leeway == 0:
+            complement_indexes = np.any(image != color, axis=-1)
+        else:
+            image = image.astype(np.int16)
+            leeway = np.array([leeway]*3).astype(np.int16)
+            complement_indexes = np.any(np.abs(image - color) > leeway, axis=-1)
+
         match complement:
             case "NOTHING":
                 new_image[complement_indexes] = image[complement_indexes]
