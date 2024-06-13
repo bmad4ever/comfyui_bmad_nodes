@@ -1,0 +1,15 @@
+[project]
+name = "comfyui_bmad_nodes"
+description = "This custom node offers the following functionalities: API support for setting up API requests, computer vision primarily for masking or collages, and general utility to streamline workflow setup or implement essential missing features."
+version = "1.0.0"
+license = "LICENSE"
+dependencies = ["gray2color", "opencv-python~=4.8.1.78", "scikit-image~=0.20.0"]
+
+[project.urls]
+Repository = "https://github.com/bmad4ever/comfyui_bmad_nodes"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "comfyui_bmad_nodes"
+Icon = ""
