@@ -6,6 +6,7 @@ from .utils.dry import (tensor2opencv, opencv2tensor, image_output_formats_optio
                         maybe_convert_img, image_output_formats_options_map, prepare_text_for_eval, cache_with_ids,
                         filter_expression_names, base_category_path, images_category_path, print_yellow)
 from .utils.color import (ImageColor, setup_color_to_correct_type, find_complementary_color, HSV_Samples, Interval)
+from .utils.templates import ComboWrapperNode
 
 # TODO these nodes return the mask, not the image with the background removed!
 #       this is somewhat misleading. Consider changing the methods names.
@@ -64,7 +65,7 @@ class CopyMakeBorderSimple:
             "required": {
                 "image": ("IMAGE",),
                 "border_size": ("INT", {"default": 64}),
-                "border_type": (border_types_excluding_transparent, border_types[0])
+                "border_type": (border_types_excluding_transparent, {"default": border_types[0]})
             }}
 
     RETURN_TYPES = ("IMAGE",)
@@ -1192,10 +1193,26 @@ class FindThreshold:
         return (img,)
 
 
+#class IN_RANGE_HUE_MODE:
+#    @classmethod
+#    def INPUT_TYPES(cls):
+#        return {"required": {
+#            "hue_mode": (InRangeHSV.hue_modes, {"default": InRangeHSV.hue_modes[0]})
+#        }}
+#
+#    RETURN_TYPES = ("IR_HUE_MODE",)
+#    FUNCTION = "ret"
+#    CATEGORY = f"{cv_category_path}/Thresholding"
+#
+#    def ret(self, hue_mode):
+#        return (hue_mode,)
+
 class InRangeHSV:
     # w/ respect to documentation in :
     #   https://docs.opencv.org/3.4/d2/de8/group__core__array.html#ga48af0ab51e36436c5d04340e036ce981
     # both bounds are inclusive
+
+    # Hardcoded for 180 degrees hue
 
     @staticmethod
     def get_saturation_and_value_bounds(color_a, color_b):
@@ -1265,7 +1282,7 @@ class InRangeHSV:
             "rgb_image": ("IMAGE",),
             "color_a": ("HSV_COLOR",),
             "color_b": ("HSV_COLOR",),
-            "hue_mode": (cls.hue_modes, {"default": cls.hue_modes[0]})
+            "hue_mode": (IN_RANGE_HUE_MODE.TYPE_NAME,)
         }}
 
     RETURN_TYPES = ("IMAGE",)
@@ -1279,6 +1296,12 @@ class InRangeHSV:
         thresh = cv.cvtColor(thresh, cv.COLOR_GRAY2RGB)
         thresh = opencv2tensor(thresh)
         return (thresh,)
+
+
+class IN_RANGE_HUE_MODE(metaclass=ComboWrapperNode):
+    TYPE_NAME = "IR_HUE_MODE"
+    OPTIONS_LIST = InRangeHSV.hue_modes
+    CATEGORY = f"{cv_category_path}/Thresholding"
 
 
 class DistanceTransform:
@@ -1464,7 +1487,7 @@ class FindComplementaryColor:
         return {"required": {
             "image": ("IMAGE",),
             "color_dict": ("COLOR_DICT",),
-            "power": ("FLOAT", {"default": 0.5, "min": .01, "max": 10, "step": "0.01"}),
+            "power": ("FLOAT", {"default": 0.5, "min": .01, "max": 10, "step": 0.01}),
         },
             "optional":
                 {
@@ -1700,10 +1723,10 @@ class BuildColorRangeHSV:
         return {"required": {
             "samples": ("HSV_SAMPLES",),
             "percentage_modifier": ("INT", {"default": 50, "min": 1, "max": 100}),
-            "interval_type": (cls.interval_modes, cls.interval_modes[0]),
+            "interval_type": (cls.interval_modes, {"default": cls.interval_modes[0]}),
         }}
 
-    RETURN_TYPES = ("HSV_COLOR", "HSV_COLOR", InRangeHSV.hue_modes)
+    RETURN_TYPES = ("HSV_COLOR", "HSV_COLOR", IN_RANGE_HUE_MODE.TYPE_NAME)
     FUNCTION = "get_interval"
     CATEGORY = f"{cv_category_path}/Color A."
 
@@ -1751,7 +1774,7 @@ class BuildColorRangeHSVAdvanced:
             "val_exp": ("STRING", {"multiline": True, "default": cls.default_value_expression}),
         }}
 
-    RETURN_TYPES = ("HSV_COLOR", "HSV_COLOR", InRangeHSV.hue_modes)
+    RETURN_TYPES = ("HSV_COLOR", "HSV_COLOR", IN_RANGE_HUE_MODE.TYPE_NAME)
     FUNCTION = "get_interval"
     CATEGORY = f"{cv_category_path}/Color A."
 
@@ -2282,6 +2305,7 @@ NODE_CLASS_MAPPINGS = {
     "EqualizeHistogram": EqualizeHistogram,
     "CLAHE": CLAHE,
     "FindThreshold": FindThreshold,
+    "Hue Mode (InRange hsv)": IN_RANGE_HUE_MODE,
     "InRange (hsv)": InRangeHSV,
     "DistanceTransform": DistanceTransform,
     # note: invert already exist: should be named ImageInvert, unless "overwritten" by some other custom node
