@@ -64,7 +64,7 @@ class CopyMakeBorderSimple:
             "required": {
                 "image": ("IMAGE",),
                 "border_size": ("INT", {"default": 64}),
-                "border_type": (border_types_excluding_transparent, border_types[0])
+                "border_type": (border_types_excluding_transparent, {"default": border_types[0]})
             }}
 
     RETURN_TYPES = ("IMAGE",)
@@ -1700,7 +1700,7 @@ class BuildColorRangeHSV:
         return {"required": {
             "samples": ("HSV_SAMPLES",),
             "percentage_modifier": ("INT", {"default": 50, "min": 1, "max": 100}),
-            "interval_type": (cls.interval_modes, cls.interval_modes[0]),
+            "interval_type": (cls.interval_modes, {"default": cls.interval_modes[0]}),
         }}
 
     RETURN_TYPES = ("HSV_COLOR", "HSV_COLOR", InRangeHSV.hue_modes)
