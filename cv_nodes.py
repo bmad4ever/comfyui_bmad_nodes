@@ -1464,7 +1464,7 @@ class FindComplementaryColor:
         return {"required": {
             "image": ("IMAGE",),
             "color_dict": ("COLOR_DICT",),
-            "power": ("FLOAT", {"default": 0.5, "min": .01, "max": 10, "step": "0.01"}),
+            "power": ("FLOAT", {"default": 0.5, "min": .01, "max": 10, "step": 0.01}),
         },
             "optional":
                 {
