@@ -814,9 +814,24 @@ def get_ordered_corners(quad_corners: list[tuple[int, int]]) -> list[tuple[int, 
 
 
 def get_quad_corners(roi_img) -> list[tuple[int, int]]:
-    contours, _ = cv.findContours(roi_img, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
-    moments = [cv.moments(c) for c in contours]
-    centers = [(int(m["m10"] / m["m00"]), int(m["m01"] / m["m00"])) for m in moments]
+    # This method doesn't seem to work...need review
+    # contours, _ = cv.findContours(roi_img, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+    # moments = [cv.moments(c) for c in contours]
+    # centers = [(int(m["m10"] / m["m00"]), int(m["m01"] / m["m00"])) for m in moments]
+    # return centers
+
+    # New method that should work:
+    # Find contours
+    contours, _ = cv.findContours(roi_img, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    # Iterate through contours and find corners
+    for contour in contours:
+        # Calculate arc length for epsilon calculation
+        perimeter = cv.arcLength(contour, True)
+    # Approximate the contour to find corners
+    # Adjust epsilon based on your needs (e.g., 0.02 * perimeter)
+    epsilon = 0.02 * perimeter
+    approx = cv.approxPolyDP(contour, epsilon, True)
+    centers = [(int(point[0][0]), int(point[0][1])) for point in approx]
     return centers
 
 
