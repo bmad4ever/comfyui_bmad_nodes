@@ -1,3 +1,4 @@
 gray2color
 opencv-python~=4.8.1.78
 scikit-image~=0.20.0
+simpleeval~=1.0.3

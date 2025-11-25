@@ -113,41 +113,6 @@ def cache_with_ids(single: bool = False):
 
     return decorator
 
-# region prepare strings for eval
-
-def prepare_text_for_eval(text, complementary_purge_list=None):
-    import re
-
-    # purge the string from domonic entities
-    for item in ["exec", "import", "eval", "lambda", "_name_", "_class_", "_bases_",
-                 "write", "save", "store", "read", "open", "load", "from", "file"]:
-        text = text.replace(item, "")
-
-    if complementary_purge_list is not None:
-        for item in complementary_purge_list:
-            text = text.replace(item, "")
-
-    # remove comments and new lines
-    text = re.sub('#.+', '', text)
-    text = re.sub('\n', '', text)
-
-    return text
-
-def filter_expression_names(accept_filter_func: Callable[[str], bool], expression: str) -> list[str]:
-    """
-    Filters name tokens from the given expression.
-    Usage example: filter properties so that only the ones in the expression are added to the eval scope.
-    """
-    import io
-    import tokenize
-    tokens = tokenize.tokenize(io.BytesIO(expression.encode('utf-8')).readline)
-    relevant_names_in_expression = []
-    for token_type, token_value, _, _, _ in tokens:
-        if token_type == tokenize.NAME and token_value and accept_filter_func(token_value):
-            relevant_names_in_expression.append(token_value)
-    return relevant_names_in_expression
-
-# endregion
 
 rect_modes_map = {
         'top-left XY + WH': {

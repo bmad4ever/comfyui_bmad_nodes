@@ -3,10 +3,12 @@ import numpy as np
 import cv2 as cv
 import math
 from .utils.dry import (tensor2opencv, opencv2tensor, image_output_formats_options, rect_modes, rect_modes_map,
-                        maybe_convert_img, image_output_formats_options_map, prepare_text_for_eval, cache_with_ids,
-                        filter_expression_names, base_category_path, images_category_path, print_yellow)
+                        maybe_convert_img, image_output_formats_options_map, cache_with_ids,
+                        base_category_path, images_category_path, print_yellow)
 from .utils.color import (ImageColor, setup_color_to_correct_type, find_complementary_color, HSV_Samples, Interval)
 from .utils.templates import ComboWrapperNode
+
+from .utils.quasi_safu import safe_eval
 
 # TODO these nodes return the mask, not the image with the background removed!
 #       this is somewhat misleading. Consider changing the methods names.
@@ -664,8 +666,6 @@ class FilterContour:
         if image is not None:
             image = tensor2opencv(image)
 
-        fitness = prepare_text_for_eval(fitness)
-
         # endregion
 
         # region available functions
@@ -771,14 +771,28 @@ class FilterContour:
             if callable(value):
                 available_funcs[key] = value
 
-        fitness = eval(f"lambda c, i, a: {fitness}", {
-            "__builtins__": {},
-            "tuple": tuple, "list": list,
-            'm': math, 'cv': cv2, 'np': numpy,
-            **available_funcs
-        }, {})
+        def create_fitness_function(fitness_expr: str):
+            """
+            Create a fitness function from an expression string.
+            The expression should use 'c', 'i', 'a' as parameter names.
+            """
 
-        ret = self.return_modes_map[select](contours, lambda c: fitness(c, image, aux_contour))
+            def fitness_wrapper(c, i, a):
+                return safe_eval(
+                    fitness_expr,
+                    extra_names={'c': c, 'i': i, 'a': a, 'cv': cv2, 'np': numpy},
+                    allowed_functions=available_funcs,
+                    include_math=True,  # Gives access to 'm'
+                    use_compound_types=True,  # Allows list/tuple operations
+                    timeout=120.0
+                )
+
+            return fitness_wrapper
+
+        # Usage
+        fitness_func = create_fitness_function(fitness)  # create function from expression
+        ret = self.return_modes_map[select](contours, lambda c: fitness_func(c, image, aux_contour))
+
         return (ret[0], ret,)
 
 
@@ -1162,7 +1176,6 @@ class FindThreshold:
     def search(self, src, start_at, end_at, thresh_type, downscale_factor, condition):
         import cv2
         import numpy
-        import math
 
         o_img = tensor2opencv(src, 1)
         height, width = tuple(o_img.shape)
@@ -1174,12 +1187,19 @@ class FindThreshold:
         if end_at < start_at:
             range_to_check = range_to_check.__reversed__()
 
-        condition = prepare_text_for_eval(condition)
-        cond_check = eval(f"lambda t: {condition}", {
-            "__builtins__": {},
-            "tuple": tuple, "list": list,
-            'm': math, 'cv': cv2, 'np': numpy
-        }, {})
+        def create_condition_function(expr: str):
+            def condition_wrapper(t):
+                return safe_eval(
+                    expr,
+                    extra_names={'t': t, 'cv': cv2, 'np': numpy},
+                    include_math=True,  # Gives access to 'm'
+                    use_compound_types=True,  # Allows list/tuple operations
+                    timeout=180.0
+                )
+
+            return condition_wrapper
+
+        cond_check = create_condition_function(condition)
 
         thresh_value = end_at
         for i in range_to_check:
@@ -1791,31 +1811,32 @@ v_quant2(0,1).interpolate(.5, [0, 255]).scale_by_constant(50) if 2 < v_median < 
     def get_interval(self, samples, hue_exp, sat_exp, val_exp):
         self.samples = samples
 
-        # function to get sample names to include (avoids pre computing everything)
+        # function to get sample names to include (avoids pre-computing everything)
         # this supposes some computations could take considerable time, thus avoiding them if not used
         def valid_token(token: str):
-            return token in samples_names and (
+            return (
                     token.startswith("h_") or token.startswith("s_") or token.startswith("v_") or
-                    token == "to_interval" or token == "minmax" or token == "maxmin"
+                    token == "minmax" or token == "maxmin" or
+                    token == "to_interval"
             )
+
 
         # get bounds from the eval expressions
         bounds = {}
-        samples_names = dir(samples)
         for key, expression in {"h": hue_exp, "s": sat_exp, "v": val_exp}.items():
-            expression = prepare_text_for_eval(expression)  # purge potentially dangerous tokens
-
-            locals_to_include_names = filter_expression_names(valid_token, expression)
-            locals_to_include = {
-                name: getattr(samples, name)
-                for name in locals_to_include_names
-            }
-
-            bounds[key] = eval(expression, {
-                "__builtins__": {},
-                'min': min, 'max': max, 'm': math,
-                **locals_to_include
-            }, {})
+            bounds[key] = safe_eval(
+                expression=expression,
+                source_object=samples,
+                token_validator=valid_token,
+                use_compound_types=True,
+                include_math=True,
+                timeout=60.0,
+                allowed_functions={
+                        'min': min,
+                        'max': max,
+                        'abs': abs,
+                    }
+            )
 
         # get 2 colors that represent the computed lower and upper bounds
         lower_bounds = np.array([bounds.get("h")[0], bounds.get("s")[0], bounds.get("v")[0]]).round()

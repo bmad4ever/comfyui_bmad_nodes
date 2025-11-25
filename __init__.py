@@ -39,6 +39,15 @@ except Exception as e:
     not_loaded.append("color clip ade20k node")
 
 try:
+    from .wildcard_nodes import NODE_CLASS_MAPPINGS as wildcards
+
+    loaded.append("AnyToAny node (1)")
+except Exception as e:
+    wildcards = {}
+    exceptions.append(e)
+    not_loaded.append("AnyToAny node")
+
+try:
     from .extension_dependant_utilities import NODE_CLASS_MAPPINGS as extended
 
     loaded.append(f"extension dependent nodes ({len([*extended])})")
@@ -49,7 +58,7 @@ except Exception as e:
 
 import nodes
 
-NODE_CLASS_MAPPINGS = {**api, **simple, **cv_nodes, **cc_ade20k, **extended}
+NODE_CLASS_MAPPINGS = {**api, **simple, **cv_nodes, **cc_ade20k, **extended, **wildcards}
 WEB_DIRECTORY = "js"
 
 __all__ = ['NODE_CLASS_MAPPINGS']

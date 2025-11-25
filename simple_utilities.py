@@ -5,7 +5,7 @@ import torch
 from .utils.dry import (base_category_path, images_category_path, conditioning_category_path,
                         opencv2tensor, tensor2opencv, image_output_formats_options, image_output_formats_options_map,
                         grid_len_INPUT, maybe_convert_img, rect_modes, rect_modes_map,
-                        prepare_text_for_eval, get_arg_name_from_multiple_inputs, print_yellow)
+                        get_arg_name_from_multiple_inputs, print_yellow)
 from .utils.color import ColorClip, color255_INPUT
 
 
@@ -434,27 +434,6 @@ class VAEEncodeBatch:
 
         return ({"samples": latent},)
 
-
-class AnyToAny:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {"required": {
-            "v": ("*",),
-            "function": ("STRING", {"multiline": True, "default": ""}),
-        }}
-
-    FUNCTION = "eval_it"
-    CATEGORY = f"{base_category_path}/⚠️⚠️⚠️"
-    RETURN_TYPES = tuple(["*" for x in range(16)])
-
-    def eval_it(self, v, function):
-        function = prepare_text_for_eval(function)
-        expression = eval(f"lambda v: {function}", {
-            "__builtins__": {},
-            "tuple": tuple, "list": list},
-                          {})
-        result = expression(v)
-        return result
 
 
 class MaskGridNKSamplersAdvanced(nodes.KSamplerAdvanced):
@@ -923,8 +902,6 @@ NODE_CLASS_MAPPINGS = {
     "AdjustRect": AdjustRect,
 
     "VAEEncodeBatch": VAEEncodeBatch,
-
-    "AnyToAny": AnyToAny,
 
     "MaskGrid N KSamplers Advanced": MaskGridNKSamplersAdvanced,
     "Merge Latent Batch Gridwise": MergeLatentsBatchGridwise,
