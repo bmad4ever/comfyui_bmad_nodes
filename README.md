@@ -9,6 +9,9 @@ The nodes can be roughly categorized in the following way:
 - computer vision: mainly for masking and collage purposes.
 - general utility: simplify the workflow setup or implement some missing basic functionality.
 
+> [!WARNING]
+> For CV related nodes check https://github.com/bmad4ever/comfyui_cv. Feature rich, safer (with no evals), and with many workflow examples.
+
 ______________________
 
 <details><summary>
